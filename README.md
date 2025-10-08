@@ -17,16 +17,17 @@ The framework is designed to be **modular and extensible**, with a clear separat
 ## Project Structure
 
 ```
-VRPPTW/
-├── data/                  # Raw and processed datasets
-├── data_processing/       # Modules to parse and prepare problem data
-│   └── __init__.py
-├── espprc/                # Core ESPPRC framework
-│   ├── __init__.py
-│   ├── base.py            # Abstract ESPPRC base class
-│   ├── espptwc.py         # ESPPTWC problem implementation
-│   ├── label.py           # Label class representing partial paths
-│   └── problem_data_test.py  # Small test instance for ESPPTWC
+VRPTW/
+├── data/                      # Raw and processed datasets
+├── assets/                    # Visualizations of problem data
+├── data_processing/           # Modules to parse and prepare problem data
+│   └── **init**.py
+├── espprc/                    # Core ESPPRC framework
+│   ├── **init**.py
+│   ├── base.py                # Generic ESPPRC base class and Label definition
+│   ├── espptwc.py             # ESPPTWC implementation (Time Windows + Capacity)
+│   ├── solver.py              # Labeling algorithm implementation
+│   ├── problem_data_test.py   # Small test instances for ESPPTWC
 ├── .gitignore
 ├── LICENSE
 └── README.md
@@ -34,82 +35,130 @@ VRPPTW/
 
 ---
 
-## Data
-
-The project will leverage benchmark **Solomon instances** for VRPTW problems. These datasets provide standardized **customer locations, demands, vehicle capacities, and time windows**, which are used to generate problem-specific inputs (feasible arcs, travel times, etc.) for the ESPPRC-based labeling algorithm.
-
-* M. M. Solomon, *Algorithms for the Vehicle Routing and Scheduling Problems with Time Window Constraints*, Operations Research, 35(2), 1987.
-
----
-
 ## Core Components
 
-1. **ESPPRC Base Class (`espprc/base.py`)**
+### 1. ESPPRC Base Class (`espprc/base.py`)
 
-   * Abstract class for ESPPRC problems.
-   * Handles **generic label initialization**, **extension via REFs**, and **dominance checking**.
-   * Supports numpy-based vector resources for efficiency.
-   * Methods:
+The `ESPPRC` class defines a **generic framework** for solving Elementary Shortest Path Problems with Resource Constraints.  
+It handles:
+- Generic **label initialization** and **extension** via Resource Extension Functions (REFs)
+- **Feasibility checks** for all registered resources
+- **Dominance filtering** through the `Label` class
+- Unified support for **constant** and **node-dependent** resource windows
 
-     * `initialize_label()` – generic label initialization at depot.
-     * `extend_label(label, destination)` – extend label along an arc.
-     * `dominates(label1, label2)` – compare two labels.
-     * `check_feasibility(label)` – abstract, to be implemented in problem-specific subclasses.
+#### Expected `problem_data` Structure
 
-2. **Label Class (`espprc/label.py`)**
+```python
+   {
+      "num_customers": int,
+      "resource_windows": {
+         "constant": {
+               <resource_name>: ([lower_bounds], [upper_bounds]),
+               ...
+         },
+         "node_dependent": {
+               <resource_name>: ([lower_i, ..., lower_n], [upper_i, ..., upper_n]),
+               ...
+         }
+      },
+      "graph": {i: [neighbors], ...},             # adjacency list
+      "reduced_costs": {(i, j): float, ...},      # arc cost or reduced cost
+      # Optional problem-specific fields (defined by subclasses)
+   }
+```
+> The following graph illustrates how such a `problem_data` structure translates into an ESPPTWC instance, where nodes, arcs, and resource windows correspond to the defined fields.
 
-   * Represents a partial path in the graph.
-   * Stores **current node**, **resource values**, and the **full path**.
-   * Fully compatible with ESPPRC extension and dominance checks.
+![Problem Data Example](./assets/problem_data_2.png)
+---
 
-3. **ESPPTWC (`espprc/espptwc.py`)**
+### 2. Label Class (`espprc/label.py`)
 
-   * Subclass of ESPPRC implementing **elementary shortest paths with time windows and vehicle capacity**.
-   * Problem-specific REFs for:
+The `Label` class represents a **partial path** (state) during the labeling process.
 
-     * `time` (scalar, waits for destination lower bound)
-     * `reduced_cost`
-     * `load`
-     * `is_visited` (vector of visited customers)
-   * Overrides:
+* Stores **current node**, **path**, and a **resource dictionary** (`Dict[str, np.ndarray]`)
+* Implements its own **dominance rule** via `dominates(self, other)`
+* Supports deep copies of resource vectors for safe propagation
 
-     * `initialize_label()` – time as scalar
-     * `check_feasibility()` – node-specific rules for time, global rules for other resources
+Example structure:
 
-4. **Problem Data (`espprc/problem_data_test.py`)**
-
-   * Provides a **small test instance** for ESPPTWC.
-   * Format includes:
-
-     * `num_customers`, `vehicle_capacity`
-     * `resource_windows` (lower/upper bounds for each resource)
-     * `graph` (adjacency dictionary)
-     * `reduced_costs`, `travel_times`, `demands`
+```python
+Label(
+    node=3,
+    resources={"time": np.array([12.0]), "load": np.array([7.0])},
+    path=[0, 1, 3]
+)
+```
 
 ---
 
-## Next Steps
+### 3. ESPPTWC (`espprc/espptwc.py`)
 
-Future development will focus on:
+Implements the **Elementary Shortest Path Problem with Time Windows and Capacity** (ESPPTWC).
+This subclass registers **problem-specific REFs** for:
 
-1. **Data Processing Modules**
+* `time` (scalar, respecting node-dependent time windows)
+* `load` (vehicle capacity constraint)
+* `reduced_cost` (accumulated reduced cost)
+* `is_visited` (vector of visited customers)
 
-   * Parse Solomon datasets.
-   * Construct **problem-specific data**: feasible arcs, distances, travel times, etc.
 
-2. **Labeling Algorithm**
 
-   * Implement the labeling algorithm.
+---
 
-3. **Additional ESPPRC Variants**
+### 4. Labeling Algorithm (`espprc/solver.py`)
 
-   * Implement other ESPPRC problems for VRPTW variants.
-   * Reuse the base class to define new REFs and feasibility rules.
+Implements a **generic labeling algorithm** to solve ESPPRC instances.
 
-4. **Column Generation Approach**
+Main steps:
 
-   * Use the labeling algorithm to **solve ESPPTWC and other variants**.
-   * Integrate with master problem formulations for vehicle routing optimization.
+1. Initialize feasible labels at the start depot.
+2. Extend labels along feasible arcs.
+3. Apply dominance filtering to prune suboptimal labels.
+4. Collect non-dominated labels reaching the end depot.
+
+Example usage:
+
+```python
+from espprc.espptwc import ESPPTWC
+from espprc.problem_data_test import problem_data_test_2
+from espprc.solver import labeling_algorithm
+
+if __name__ == "__main__":
+    problem = ESPPTWC(problem_data_test_2)
+    best_labels = labeling_algorithm(problem)
+    print(best_labels)
+```
+
+---
+
+## Example Problem Data Tests
+
+Three small **ESPPTWC test instances** are included to validate the labeling algorithm:
+
+* `problem_data_test_1`
+* `problem_data_test_2`
+* `problem_data_test_3`
+
+Each defines a toy problem with capacity and time window constraints, useful for debugging and algorithm verification.
+
+---
+
+## Data & Benchmarks
+
+The project will later leverage **Solomon benchmark instances** for VRPTW problems:
+
+> M. M. Solomon, *Algorithms for the Vehicle Routing and Scheduling Problems with Time Window Constraints*, Operations Research, 35(2), 1987.
+
+These datasets will be parsed and converted into the above `problem_data` format via the `data_processing` module.
+
+---
+
+## Future Directions
+
+1. **Integration with Column Generation**
+   * Use the labeling algorithm within a Dantzig–Wolfe master problem for VRPTW.
+2. **Additional ESPPRC Variants**
+   * Extend framework to handle stochastic or multi-resource problems.
 
 ---
 

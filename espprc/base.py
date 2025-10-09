@@ -38,7 +38,9 @@ class ESPPRC(ABC):
 
     def __init__(self, problem_data: Dict[str, Any]):
         self.problem_data = problem_data
-        self.refs: Dict[str, Callable[[np.ndarray, int, int, Dict], np.ndarray]] = {}
+        self.refs: Dict[
+            str, Callable[[Dict[str, np.ndarray], int, int, Dict], np.ndarray]
+        ] = {}
 
     def add_ref(self, name: str, ref: Callable):
         """Register a resource extension function (REF) for a resource name."""
@@ -69,9 +71,9 @@ class ESPPRC(ABC):
                 return None
 
         new_resources = {}
-        for name, value in label.resources.items():
+        for name in label.resources:
             new_resources[name] = self.refs[name](
-                value.copy(), label.node, destination, self.problem_data
+                label.resources, label.node, destination, self.problem_data
             )
         return Label(node=destination, resources=new_resources, path=label.path)
 

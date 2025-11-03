@@ -1,6 +1,6 @@
 from typing import Dict, Any
 import numpy as np
-from espprc.base import ESPPRC
+from espprc.base_espprc import ESPPRC
 
 
 class ESPPTWC(ESPPRC):

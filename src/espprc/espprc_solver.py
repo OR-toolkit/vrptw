@@ -1,6 +1,6 @@
 from typing import List, Dict, Callable
 from espprc.label import Label
-from espprc.base import ESPPRC
+from espprc.base_espprc import ESPPRC
 
 
 def fifo_selector(unprocessed_labels: Dict[int, List[Label]]) -> Label:

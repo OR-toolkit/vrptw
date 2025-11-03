@@ -1,0 +1,62 @@
+from dataclasses import dataclass, field
+from typing import Dict, Optional
+
+
+@dataclass
+class Variable:
+    """Representation of a decision variable."""
+
+    name: str
+    lb: float = 0.0
+    ub: Optional[float] = None
+    is_integer: bool = False
+
+
+@dataclass
+class Constraint:
+    """Representation of a linear constraint."""
+
+    name: str
+    coefficients: Dict[str, float]  # {var_name: coefficient}
+    sense: str  # '=', '<=', '>='
+    rhs: float
+
+
+@dataclass
+class Objective:
+    sense: str = "min"  # or "max"
+    coefficients: Dict[str, float] = field(default_factory=dict)
+
+
+@dataclass
+class Model:
+    """Pure mathematical representation of an LP/MIP model."""
+
+    name: str = "model"
+    variables: Dict[str, Variable] = field(default_factory=dict)
+    constraints: Dict[str, Constraint] = field(default_factory=dict)
+    objective: Objective = field(default_factory=Objective)
+
+    def add_variable(
+        self,
+        name: str,
+        obj_coeff: float = 0.0,
+        col_coeffs: dict[str, float] | None = None,
+        lb: float = 0.0,
+        ub: float | None = None,
+        is_integer: bool = False,
+    ):
+        """
+        Add a new decision variable and update the model (objective and constraints).
+        """
+        if name in self.variables:
+            raise ValueError(f"Variable '{name}' already exists in the model.")
+
+        self.variables[name] = Variable(name, lb, ub, is_integer)
+
+        self.objective.coefficients[name] = obj_coeff
+
+        for constr in self.constraints.values():
+            constr.coefficients[name] = (
+                col_coeffs.get(constr.name, 0.0) if col_coeffs else 0.0
+            )

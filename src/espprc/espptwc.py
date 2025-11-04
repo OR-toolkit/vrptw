@@ -1,34 +1,19 @@
-from typing import Dict, Any
 import numpy as np
-from espprc.base_espprc import ESPPRC
+from .base_espprc import ESPPRC
+from .espprc_instance import ESPPTWCProblemData, ESPPRCBaseProblemData
 
 
 class ESPPTWC(ESPPRC):
     """Elementary Shortest Path Problem with Time Windows and Capacity (ESPPTWC).
 
-    Expected problem_data structure:
-    (I will tackle this data parsing in another package)
-
-    {
-        "num_customers": int,
-        "resource_windows": {
-            "constant": {
-                "load": ([0.0], [vehicle_capacity]),
-                "is_visited": ([0.0, ..., 0.0], [1.0, ..., 1.0]),
-                "reduced_cost": ([0.0], [np.inf])
-            },
-            "node_dependent": {
-                "time": ([lower_0, ..., lower_n], [upper_0, ..., upper_n])
-            }
-        },
-        "graph": {i: [neighbors], ...},
-        "reduced_costs": {(i, j): float, ...},
-        "travel_times": {(i, j): float, ...},
-        "demands": {i: float, ...}
-    }
+    Accepts problem_data as either a dictionary or an ESPPTWCProblemData object.
+    See espprc_instance.py for full data structure.
     """
 
-    def __init__(self, problem_data: Dict[str, Any]):
+    def __init__(self, problem_data):
+        # Allow direct passing of ESPPTWCProblemData or ESPPRCBaseProblemData
+        if isinstance(problem_data, (ESPPTWCProblemData, ESPPRCBaseProblemData)):
+            problem_data = problem_data.to_dict()
         super().__init__(problem_data)
 
         # Register REFs
@@ -67,81 +52,3 @@ class ESPPTWC(ESPPRC):
         new_resource = label_resources["is_visited"].copy()
         new_resource[dest] = 1
         return new_resource
-
-
-if __name__ == "__main__":
-    from espprc.problem_data_test import problem_data_test_1
-
-    problem_data = problem_data_test_1
-
-    # Create ESPPTWC instance
-    espptwc = ESPPTWC(problem_data)
-
-    # Initialize label at depot node 0
-    depot_label = espptwc.initialize_label(start_node=0)
-
-    print("Initial depot label resources:")
-    for r, val in depot_label.resources.items():
-        print(f"{r}: {val}")
-    print("Path:", depot_label.path)
-
-    # Extend from depot to customer 1
-    label1 = espptwc.extend_label(depot_label, destination=1)
-    if label1:
-        print("\nExtended label to customer 1:")
-        for r, val in label1.resources.items():
-            print(f"{r}: {val}")
-        print("Path:", label1.path)
-    else:
-        print("\nExtension to customer 1 is infeasible")
-
-    # Extend from depot to customer 2
-    label2 = espptwc.extend_label(depot_label, destination=2)
-    if label2:
-        print("\nExtended label to customer 2:")
-        for r, val in label2.resources.items():
-            print(f"{r}: {val}")
-        print("Path:", label2.path)
-    else:
-        print("\nExtension from depot to customer 2 is infeasible")
-
-    # Extend from depot to customer 3 (infeasible)
-    label3 = espptwc.extend_label(depot_label, destination=3)
-    if label3:
-        print("\nExtended depot label from depot to customer 3:")
-        for r, val in label3.resources.items():
-            print(f"{r}: {val}")
-        print("Path:", label2.path)
-    else:
-        print("\n depot extension to customer 3 is infeasible")
-
-    # Extend from label1 to customer 3
-    label13 = espptwc.extend_label(label1, destination=3)
-    if label13:
-        print("\nExtended label1 to customer 3:")
-        for r, val in label13.resources.items():
-            print(f"{r}: {val}")
-        print("Path:", label13.path)
-    else:
-        print("\nExtension to customer 3 is infeasible from label1")
-
-    # Extend from label2 to customer 3
-    label23 = espptwc.extend_label(label2, destination=3)
-    if label23:
-        print("\nExtended label2 to customer 3:")
-        for r, val in label23.resources.items():
-            print(f"{r}: {val}")
-        print("Path:", label23.path)
-    else:
-        print("\nExtension to customer 3 is infeasible from label2")
-
-    # chceck feasibility
-    print(espptwc.check_feasibility(label1))
-    print(espptwc.check_feasibility(label2))
-    print(espptwc.check_feasibility(label13))
-    print(espptwc.check_feasibility(label23))
-
-    # check dominance
-    print(label1.dominates(label1))
-    print(label1.dominates(label2))
-    print(label2.dominates(label1))

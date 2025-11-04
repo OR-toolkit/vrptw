@@ -1,6 +1,6 @@
 from typing import List, Dict, Callable
-from espprc.label import Label
-from espprc.base_espprc import ESPPRC
+from .label import Label
+from .base_espprc import ESPPRC
 
 
 def fifo_selector(unprocessed_labels: Dict[int, List[Label]]) -> Label:
@@ -119,23 +119,3 @@ def labeling_algorithm(
     ]
 
     return best_labels
-
-
-if __name__ == "__main__":
-    from espprc.problem_data_test import problem_data_test_1 as problem_data
-    from espprc.espptwc import ESPPTWC
-
-    espptwc = ESPPTWC(problem_data)
-    min_label_selector = make_min_resource_selector(resource_name="time")
-
-    best_labels = labeling_algorithm(problem=espptwc, label_selector=min_label_selector)
-    print(best_labels)
-
-    print("Results:")
-    for label in best_labels:
-        resources = label.resources
-        cost = resources["reduced_cost"][0]
-        load = resources["load"][0]
-        time = resources["time"][0]
-        path = label.path
-        print(f"  Cost: {cost}, Load: {load}, Time: {time}, Path: {path}")

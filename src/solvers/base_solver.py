@@ -21,6 +21,12 @@ class BaseSolver(ABC):
         """Add a variable to the internal model representation."""
         self.model.add_variable(name, obj_coeff, col_coeffs, lb, ub, is_integer)
 
+    def set_objective(self, name: str, coefficients: Dict[str, float], sense: str):
+        """
+        Set the objective of both the abstract and Docplex models.
+        """
+        self.model.set_objective(name, coefficients, sense)
+    
     @abstractmethod
     def solve(self) -> Dict[str, Any]:
         """

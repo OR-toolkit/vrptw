@@ -60,3 +60,28 @@ class Model:
             constr.coefficients[name] = (
                 col_coeffs.get(constr.name, 0.0) if col_coeffs else 0.0
             )
+
+
+    def add_constraint(
+        self,
+        name: str,
+        coefficients: dict[str, float],
+        sense: str,
+        rhs: float,
+    ):
+        """
+        Add a linear constraint to the model.
+        coefficients: Dict[var_name, coef], only nonzero entries
+        sense: '=', '<=', '>='
+        rhs: right-hand side float
+        """
+        if name in self.constraints:
+            raise ValueError(f"Constraint '{name}' already exists in the model.")
+        # For variables missing in coefficients, assume 0.0; for missing variables, add them with coef 0.0 for this constraint
+        coef_full = {v: coefficients.get(v, 0.0) for v in self.variables}
+        self.constraints[name] = Constraint(
+            name=name,
+            coefficients=coef_full,
+            sense=sense,
+            rhs=rhs,
+        )

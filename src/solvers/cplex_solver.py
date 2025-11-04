@@ -67,12 +67,12 @@ class CplexSolver(BaseSolver):
         else:
             var = self._model.continuous_var(lb=lb, ub=ub, name=name)
 
-        self._var_map[name] = var
         if obj != 0:
-            new_expression = self._model.objective_expr()
-            self._model.objective_expr(new_expr=new_expression)
-            self._model.set_objective(self._model.objective_expr + obj * var)
-        for constr in self.model.constraints:
+            new_expression = self._model.get_objective_expr()+ obj * var
+            sense = self.model.objective.sense
+            self._model.set_objective(sense=sense,expr=new_expression)
+
+        for constr in self.model.constraints.values():
             coef = constr.coefficients.get(name, 0.0)
             if coef != 0:
                 self._model.get_constraint_by_name(constr.name).lhs += coef * var

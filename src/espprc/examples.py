@@ -1,7 +1,6 @@
 import numpy as np
-from .espprc_instance import BaseResourceWindows, ESPPTWCProblemData
+from .problem_data import BaseResourceWindows, ESPPTWCProblemData
 
-# DEPRECATED: Raw dict version for reference only.
 espptwc_test_1 = {
     "num_customers": 3,  # customers 1, 2, 3
     # ---- Resource windows ----
@@ -28,7 +27,7 @@ espptwc_test_1 = {
         4: [],  # end depot
     },
     # ---- Arc costs ----
-    "reduced_costs": {
+    "costs": {
         (0, 1): 3.0,
         (0, 2): 6.0,
         (0, 3): 7.0,
@@ -86,7 +85,7 @@ espptwc_test_2 = {
         4: [],
     },
     # ---- Arc costs ----
-    "reduced_costs": {
+    "costs": {
         (0, 1): 3.0,
         (0, 2): 6.0,
         (0, 3): 10.0,  # BIGGER REDUCED COST
@@ -144,7 +143,7 @@ espptwc_test_3 = {
         4: [],
     },
     # ---- Arc costs ----
-    "reduced_costs": {
+    "costs": {
         (0, 1): 3.0,
         (0, 2): 6.0,
         (0, 3): 2.0,  # SMALLER REDUCED COST
@@ -185,7 +184,7 @@ problem_instance_1 = ESPPTWCProblemData(
         node_dependent=espptwc_test_1["resource_windows"]["node_dependent"],
     ),
     graph=espptwc_test_1["graph"],
-    reduced_costs=espptwc_test_1["reduced_costs"],
+    costs=espptwc_test_1["costs"],
     travel_times=espptwc_test_1["travel_times"],
     demands=espptwc_test_1["demands"],
 )
@@ -197,7 +196,7 @@ problem_instance_2 = ESPPTWCProblemData(
         node_dependent=espptwc_test_2["resource_windows"]["node_dependent"],
     ),
     graph=espptwc_test_2["graph"],
-    reduced_costs=espptwc_test_2["reduced_costs"],
+    costs=espptwc_test_2["costs"],
     travel_times=espptwc_test_2["travel_times"],
     demands=espptwc_test_2["demands"],
 )
@@ -209,7 +208,7 @@ problem_instance_3 = ESPPTWCProblemData(
         node_dependent=espptwc_test_3["resource_windows"]["node_dependent"],
     ),
     graph=espptwc_test_3["graph"],
-    reduced_costs=espptwc_test_3["reduced_costs"],
+    costs=espptwc_test_3["costs"],
     travel_times=espptwc_test_3["travel_times"],
     demands=espptwc_test_3["demands"],
 )
@@ -292,24 +291,26 @@ def espptwc_basic_example():
 
 def labeling_algorithm_basic_example():
     """
-    Example showing usage of the generic labeling_algorithm and printing the best labels/resources.
+    Example showing usage of the LabelingSolver class and printing the best labels/resources.
     """
     from .espptwc import ESPPTWC
-    from .espprc_solver import make_min_resource_selector, labeling_algorithm
+    from .espprc_solver import LabelingSolver
 
-    pbdata = espptwc_test_1
-    espptwc = ESPPTWC(pbdata)
-    min_label_selector = make_min_resource_selector(resource_name="time")
-    best_labels = labeling_algorithm(problem=espptwc, label_selector=min_label_selector)
-    print(best_labels)
+    espptwc = ESPPTWC(problem_instance_1)
+    min_label_selector = LabelingSolver.make_min_resource_selector(resource_name="time")
+    solver = LabelingSolver(espptwc, label_selector=min_label_selector)
+    best_labels, _ = solver.solve()
+
     print("Results:")
     for label in best_labels:
         resources = label.resources
-        cost = resources["reduced_cost"][0]
+        reduced_cost = resources["reduced_cost"][0]
         load = resources["load"][0]
         time = resources["time"][0]
         path = label.path
-        print(f"  Cost: {cost}, Load: {load}, Time: {time}, Path: {path}")
+        print(
+            f"  Reduced_Cost: {reduced_cost}, Load: {load}, Time: {time}, Path: {path}"
+        )
 
 
 if __name__ == "__main__":

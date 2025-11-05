@@ -7,8 +7,11 @@ class BaseResourceWindows:
     """
     Defines the resource window format for the generic/base ESPPRC problem.
     """
+
     constant: Dict[str, Tuple[List[float], List[float]]] = field(default_factory=dict)
-    node_dependent: Dict[str, Tuple[List[float], List[float]]] = field(default_factory=dict)
+    node_dependent: Dict[str, Tuple[List[float], List[float]]] = field(
+        default_factory=dict
+    )
 
 
 @dataclass
@@ -16,10 +19,17 @@ class ESPPRCBaseProblemData:
     """
     The minimal/generic problem data structure for the base ESPPRC class.
     """
+
     num_customers: int
     resource_windows: BaseResourceWindows
     graph: Dict[int, List[int]]
-    reduced_costs: Dict[Tuple[int, int], float]
+    costs: Dict[Tuple[int, int], float]
+    adjusted_costs: Dict[Tuple[int, int], float] = field(default_factory=dict)
+
+    def __post_init__(self):
+        # Initialize adjusted_costs as an identical copy of costs, unless already provided
+        if not self.adjusted_costs:
+            self.adjusted_costs = dict(self.costs)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -29,7 +39,8 @@ class ESPPRCBaseProblemData:
                 "node_dependent": self.resource_windows.node_dependent,
             },
             "graph": self.graph,
-            "reduced_costs": self.reduced_costs,
+            "costs": self.costs,
+            "adjusted_costs": self.adjusted_costs,
         }
 
 
@@ -39,6 +50,7 @@ class ESPPTWCProblemData(ESPPRCBaseProblemData):
     Problem data structure for ESPPTWC (Elementary Shortest Path Problem with Time Windows and Capacity).
     Extends the base ESPPRC problem data with ESPPTWC-specific fields.
     """
+
     travel_times: Dict[Tuple[int, int], float] = field(default_factory=dict)
     demands: Dict[int, float] = field(default_factory=dict)
 
@@ -49,6 +61,7 @@ class ESPPTWCProblemData(ESPPRCBaseProblemData):
         if self.demands:
             base["demands"] = self.demands
         return base
+
 
 # Example usage:
 # resource_windows = BaseResourceWindows(
@@ -65,7 +78,7 @@ class ESPPTWCProblemData(ESPPRCBaseProblemData):
 #     num_customers=3,
 #     resource_windows=resource_windows,
 #     graph={0: [1,2], 1: [2,0], 2: [0]},
-#     reduced_costs={(0,1): 5.0, (1,2): 3.0, (0,2): 7.0, (2,0): 2.0, (1,0): 1.0},
+#     costs={(0,1): 5.0, (1,2): 3.0, (0,2): 7.0, (2,0): 2.0, (1,0): 1.0},
 #     travel_times = {(0,1): 8.0, (1,2): 9.0, (0,2): 25.0, (2,0): 7.0},
 #     demands = {1: 10.0, 2: 20.0}
 # )

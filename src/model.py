@@ -48,12 +48,20 @@ class Model:
     ):
         """
         Add a new decision variable and update the model (objective and constraints).
+
+        Parameters:
+            name (str): The name of the variable.
+            obj_coeff (float, optional): Objective function coefficient for this variable. Defaults to 0.0.
+            col_coeffs (dict[str, float] | None, optional): Coefficient per constraint name for the variable (maps constraint name -> coefficient).
+                If not provided, all coefficients are assumed to be 0.0. Defaults to None.
+            lb (float, optional): Lower bound of the variable. Defaults to 0.0.
+            ub (float | None, optional): Upper bound of the variable. If None, variable is unbounded above. Defaults to None.
+            is_integer (bool, optional): Whether the variable is integer-valued. Defaults to False.
         """
         if name in self.variables:
             raise ValueError(f"Variable '{name}' already exists in the model.")
 
         self.variables[name] = Variable(name, lb, ub, is_integer)
-
         self.objective.coefficients[name] = obj_coeff
 
         for constr in self.constraints.values():

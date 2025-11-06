@@ -18,7 +18,18 @@ class BaseSolver(ABC):
         ub: Optional[float] = None,
         is_integer: bool = False,
     ):
-        """Add a variable to the internal model representation."""
+        """
+        Add a variable to the internal model representation.
+
+        Parameters:
+            name (str): The name of the variable.
+            obj_coeff (float, optional): Objective function coefficient for this variable. Defaults to 0.0.
+            col_coeffs (Optional[Dict[str, float]], optional): Coefficient per constraint name {constraint_name: coefficient}. 
+                If a constraint name isn't mentioned, its coefficient is assumed to be 0.0. Defaults to None.
+            lb (float, optional): Lower bound of the variable. Defaults to 0.0.
+            ub (Optional[float], optional): Upper bound of the variable. If None, variable is unbounded above. Defaults to None.
+            is_integer (bool, optional): Whether the variable is integer-valued. Defaults to False.
+        """
         self.model.add_variable(name, obj_coeff, col_coeffs, lb, ub, is_integer)
 
     def set_objective(self, name: str, coefficients: Dict[str, float], sense: str):

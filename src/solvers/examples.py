@@ -1,6 +1,6 @@
 from ..model import Model
 from .cplex_solver import CplexSolver
-from ..models.set_covering import build_set_covering_problem
+from ..restricted_master_problems.set_covering import build_set_covering_problem
 
 
 def create_simple_model():
@@ -26,39 +26,78 @@ def test_cplex_solver_adding(model: Model):
     solver = CplexSolver(model)
     result = solver.solve()
     print(f"Initial solution: {result}")
-    solver.add_variable("z", obj=4, col_coeffs=None, lb=0)
+    solver.add_variable("z", obj_coeff=4, col_coeffs=None, lb=0)
     result = solver.solve()
     print(f"Solution after adding variable: {result}")
 
 
-if __name__ == "__main__":
-    model = create_simple_model()
-    test_cplex_solver_adding(model)
-
+def test_solving_set_covering():
     # Example cover matrix for set covering problem:
     # 4 elements (rows) to cover, 6 sets (columns)
-    # At least 2 different exact covers exist, not all sets cover all elements.
-    # Let the matrix be :
-    #     S0 S1 S2 S3 S4 S5
-    # E0  1  0  1  0  1  0
-    # E1  1  0  0  1  0  1
-    # E2  0  1  1  0  0  1
-    # E3  0  1  0  1  1  0
-    #
-    # Two exact covers:
-    #   [S0, S1]  -- S0 covers E0,E1; S1 covers E2,E3
-    #   [S2, S3]  -- S2 covers E0,E2; S3 covers E1,E3
     cover_matrix = [
+        #    S0 S1 S2 S3 S4 S5
         [1, 0, 1, 0, 1, 0],  # E0
         [1, 0, 0, 1, 0, 1],  # E1
         [0, 1, 1, 0, 0, 1],  # E2
         [0, 1, 0, 1, 1, 0],  # E3
     ]
-    #costs = [2, 3, 1, 2, 4, 1]
+    # not all sets cover all elements.
+    # exact covers:
+    #   [S0, S1]  -- S0 covers E0,E1; S1 covers E2,E3
+    #   [S2, S3]  -- S2 covers E0,E2; S3 covers E1,E3
+    #   [S4, S5]  -- S4 covers E0,E3; S5 covers E1,E2
     costs = [2, 3, 4, 2, 4, 2]
     # test partitioned and relaxed models
     relaxed_model = build_set_covering_problem(
         cover_matrix, costs, partitioned=False, relaxed=True
     )
-    print("try the set covering problem")
     test_cplex_solver(relaxed_model)
+
+
+def test_set_covering_with_paths_cplex():
+    """
+    Test the CPLEX solver for set covering where columns are the given paths.
+    The cost and cover matrix are built from these explicit paths for espptwc_test_1 / problem_instance_1.
+    """
+    from src.espprc.examples import problem_instance_1
+    from src.espprc.espptwc import ESPPTWC
+
+    # Paths (columns)
+    paths = [
+        [0, 1, 4],
+        [0, 2, 4],
+        [0, 3, 4],
+        [0, 1, 2, 3, 4],
+    ]
+
+    # Build cover matrix: each row for a customer (1..3), value 1 if path visits that customer (exclude depots 0,4)
+    num_customers = problem_instance_1.num_customers
+    cover_matrix = []
+    for customer in range(1, num_customers + 1):
+        row = []
+        for path in paths:
+            # Internal path excludes depot nodes
+            row.append(1 if customer in path[1:-1] else 0)
+        cover_matrix.append(row)
+
+    # Compute costs for each path using ESPPTWC.path_cost
+    espptwc = ESPPTWC(problem_instance_1)
+    costs = [espptwc.path_cost(path) for path in paths]
+
+    # Build and solve the set covering problem (relaxed, not partitioned)
+    model = build_set_covering_problem(
+        cover_matrix, costs, partitioned=False, relaxed=True
+    )
+    print("Solving set covering for explicit paths (columns)...")
+    test_cplex_solver(model)
+
+
+if __name__ == "__main__":
+    print("creating a simple model")
+    model = create_simple_model()
+    print("test the cplex solver updating model functionality")
+    test_cplex_solver_adding(model)
+    print("test solving set covering")
+    test_solving_set_covering()
+    print("----\ntest on a VRPTW context")
+    test_set_covering_with_paths_cplex()

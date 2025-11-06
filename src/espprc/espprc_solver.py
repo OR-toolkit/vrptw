@@ -84,15 +84,35 @@ class LabelingSolver:
         labels_at_node[start_node].append(start_label)
         unprocessed_labels[start_node].append(start_label)
 
+        # iteration = 0
         while any(unprocessed_labels[i] for i in range(num_nodes)):
+            # DEBUG
+            # print("-" * 25)
+            # print(f"labeling iteration {iteration}:")
+            # iteration += 1
+            # all_unprocessed_labels = [
+            #     label
+            #     for label_list in unprocessed_labels.values()
+            #     for label in label_list
+            # ]
+            # print(
+            #     f"unprocessed paths: {[label.path for label in all_unprocessed_labels]}"
+            # )
             current_label = label_selector(unprocessed_labels)
             current_node = current_label.node
+            # DEBUG
+            # print("-----")
+            # print(f"let's extend path: {current_label.path} ...")
             unprocessed_labels[current_node].remove(current_label)
             for dest in self.problem.problem_data.graph.get(current_node, []):
                 new_label = self.problem.extend_label(current_label, dest)
+                # DEBUG
+                # print(f"what about {new_label.path}")
+                # print(f"it has {new_label.resources['reduced_cost'][0]} cost.")
                 if new_label is None:
                     continue
                 if not self.problem.check_feasibility(new_label):
+                    # print("not feasible")
                     continue
                 # Dominance filtering
                 dominated = []
@@ -103,6 +123,7 @@ class LabelingSolver:
                         dominated.append(label)
                 # Remove dominated labels
                 for label in dominated:
+                    # print(f"removing label with path {label.path}")
                     labels_at_node[dest].remove(label)
                     if label in unprocessed_labels[dest]:
                         unprocessed_labels[dest].remove(label)
@@ -113,10 +134,16 @@ class LabelingSolver:
         final_labels = labels_at_node[end_node]
         if not final_labels:
             return []
-        min_reduced_cost = min(label.resources["reduced_cost"][0] for label in final_labels)
+        min_reduced_cost = min(
+            label.resources["reduced_cost"][0] for label in final_labels
+        )
+        # DEBUG
+        # print("labeling rusults")
+        # print("paths:", [label.path for label in final_labels])
+
         best_labels = [
             label
             for label in final_labels
             if label.resources["reduced_cost"][0] == min_reduced_cost
         ]
-        return best_labels, min_reduced_cost 
+        return best_labels, min_reduced_cost

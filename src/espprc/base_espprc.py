@@ -49,6 +49,8 @@ class ESPPRC(ABC):
         # Constant resources: same lower bound for all nodes
         for name, (low, _) in const.items():
             resources[name] = np.array(low, dtype=float)
+            # print(resources[name], name)
+        resources["reduced_cost"] = np.array([0], dtype=float)
         # Node-dependent: initialize with lower bound of start node
         for name, (low, _) in node_dep.items():
             resources[name] = np.array([low[start_node]], dtype=float)
@@ -83,6 +85,8 @@ class ESPPRC(ABC):
         for name, (low, high) in const.items():
             resource = label.resources[name]
             if np.any(resource < low) or np.any(resource > high):
+                # DEBUG
+                print(f"{name} is {resource} is not between [{low}, {high}]")
                 return False
         # Node-dependent resources: check against per-node window
         for name, (low, high) in node_dep.items():
@@ -90,10 +94,12 @@ class ESPPRC(ABC):
             lower, upper = low[node], high[node]
             resource = label.resources[name]
             if np.any(resource < lower) or np.any(resource > upper):
+                # DEBUG
+                print(f"{name} is {resource} is not between [{low}, {high}]")
                 return False
         return True
 
-    def adjust_costs(self, dual: Dict[int, float]) -> None:
+    def adjust_costs(self, dual_values: Dict[int, float]) -> None:
         """
         Adjust the adjusted costs of arcs (i, j) by subtracting the dual value
         associated with the source node i for each arc. The original costs remain unchanged.
@@ -106,7 +112,7 @@ class ESPPRC(ABC):
             adjusted_costs[(i, j)] := costs[(i, j)] - dual[i] (if dual[i] exists; if not, uses 0.0).
         """
         for (i, j), cost in self.problem_data.costs.items():
-            dual_value = dual.get(i, 0.0)
+            dual_value = dual_values.get(i, 0.0)
             self.problem_data.adjusted_costs[(i, j)] = cost - dual_value
 
     def path_cost(self, path):

@@ -69,7 +69,6 @@ class Model:
                 col_coeffs.get(constr.name, 0.0) if col_coeffs else 0.0
             )
 
-
     def add_constraint(
         self,
         name: str,
@@ -93,3 +92,49 @@ class Model:
             sense=sense,
             rhs=rhs,
         )
+
+    def __repr__(self):
+        # Get variable names in a stable order
+        var_names = list(self.variables)
+        constraint_names = list(self.constraints)
+        col_width = max(7, *(len(v) for v in var_names), 6)
+        row_label_width = max(10, *(len(c) for c in constraint_names))
+
+        # Header line for variable names
+        header = " " * (row_label_width + 2)  # padding for constraint names column
+        for v in var_names:
+            header += f"{v:>{col_width}}"
+        header += "\n"
+
+        # Objective
+        obj_line = "obj".ljust(row_label_width + 2)
+        for v in var_names:
+            coef = self.objective.coefficients.get(v, 0.0)
+            if abs(coef) < 1e-10:
+                coef_str = "·"
+            else:
+                coef_str = f"{coef:.3g}"
+            obj_line += f"{coef_str:>{col_width}}"
+        obj_line += (
+            f"\n{' ' * (row_label_width + 2)}"
+            + " ".join(["-" * col_width for _ in var_names])
+            + "\n"
+        )
+
+        # Constraint matrix
+        body = ""
+        for cname in constraint_names:
+            row = self.constraints[cname]
+            coeffs = row.coefficients
+            # Use ':' instead of the sense, and put the sense before the rhs
+            row_str = f"{cname:<{row_label_width}} : "
+            for v in var_names:
+                coef = coeffs.get(v, 0.0)
+                if abs(coef) < 1e-10:
+                    coef_str = "·"
+                else:
+                    coef_str = f"{coef:.3g}"
+                row_str += f"{coef_str:>{col_width}}"
+            row_str += f"   {row.sense} {row.rhs:.3g}\n"
+            body += row_str
+        return header + obj_line + body

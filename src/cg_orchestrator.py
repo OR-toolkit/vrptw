@@ -21,34 +21,40 @@ class ColumnGenerationOrchestrator:
         self,
         problem_data: ESPPRCBaseProblemData,
         initial_routes: Optional[List[List[int]]] = None,
-    ):
+    ) -> None:
         """
+        Initializes the ColumnGenerationOrchestrator.
+
         Args:
-            problem_data: ESPPRCBaseProblemData instance.
-            initial_routes: Optional list of ...
+            problem_data (ESPPRCBaseProblemData): The ESPPRC problem data instance.
+            initial_routes (Optional[List[List[int]]]): Optional list of initial routes. Each route is a list of node indices.
         """
-        self.problem_data = problem_data
-        self.problem = ESPPTWC(self.problem_data)
-        self.routes = initial_routes if initial_routes is not None else []
-        self.labeling_solver = None
-        self.restricted_master_model = self.initialize_restricred_master_problem()
+        self.problem_data: ESPPRCBaseProblemData = problem_data
+        self.problem: ESPPTWC = ESPPTWC(self.problem_data)
+        self.routes: List[List[int]] = (
+            initial_routes if initial_routes is not None else []
+        )
+        self.labeling_solver: LabelingSolver = LabelingSolver(
+            self.problem,
+            label_selector=LabelingSolver.make_min_resource_selector("reduced_cost"),
+        )
+        self.restricted_master_model = self._initialize_restricred_master_problem()
         self.rmp_solver = CplexSolver(self.restricted_master_model)
 
-        print(self.restricted_master_model.constraints.values())
-        self._map_constraint_name_to_int = {}
+        # Map constraint names like "cover_element_5" to their corresponding integer (e.g., 5)
+        self._map_constraint_name_to_int: Dict[str, int] = {}
         for constraint_name in self.restricted_master_model.constraints:
             num = int(constraint_name.split("_")[-1])
             self._map_constraint_name_to_int[constraint_name] = num
 
-    def initialize_restricred_master_problem(self):
+    def _initialize_restricred_master_problem(self) -> Any:
         """
         Initializes the restricted master problem (RMP) as a relaxed set covering problem.
+
+        Returns:
+            Any: The initialized restricted master problem model.
         """
         # solver of pricing problems
-        self.labeling_solver = LabelingSolver(
-            self.problem,
-            label_selector=LabelingSolver.make_min_resource_selector("reduced_cost"),
-        )
 
         if not self.routes:
             self.routes = self._generate_trivial_variables(
@@ -57,10 +63,10 @@ class ColumnGenerationOrchestrator:
         costs = [self.problem.path_cost(route) for route in self.routes]
 
         # Build the cover matrix: for each customer (row), does this route (column) visit it? 1 if yes, else 0.
-        num_customers = self.problem_data.num_customers
-        cover_matrix = []
+        num_customers: int = self.problem_data.num_customers
+        cover_matrix: List[List[int]] = []
         for customer in range(1, num_customers + 1):
-            row = []
+            row: List[int] = []
             for route in self.routes:
                 # route[1:-1] excludes depots (first and last node)
                 row.append(1 if customer in route[1:-1] else 0)
@@ -79,10 +85,10 @@ class ColumnGenerationOrchestrator:
         (excluding the depot, assumed to be node 0).
 
         Args:
-            path: a sequence of node indices, from depot at start to depot at end.
+            path (Any): a sequence of node indices, from depot at start to depot at end.
 
         Returns:
-            col_coeffs: Dict[str, float], where the key is "cover_element_{i}" for every customer node i in the path (except depot).
+            Dict[str, float]: Dictionary where the key is "cover_element_{i}" for every customer node i in the path (except depot).
         """
 
         internal_path = path[1:-1] if len(path) > 2 else []
@@ -90,9 +96,9 @@ class ColumnGenerationOrchestrator:
         return col_coeffs
 
     @staticmethod
-    def _generate_trivial_variables(num_customers):
+    def _generate_trivial_variables(num_customers: int) -> List[List[int]]:
         """
-        Generate trivial routes for the vehicule routing problem:
+        Generate trivial routes for the vehicle routing problem:
         A direct route from depot (0) to one customer x
         and then to the end depot (num_customers + 1). Each path is of the form [0, x, num_customers + 1].
 
@@ -100,9 +106,9 @@ class ColumnGenerationOrchestrator:
             num_customers (int): Number of customers (excluding depots).
 
         Returns:
-            routes (list of list): List of routes, each route is [0, x, num_customers + 1] for x in 1..num_customers.
+            List[List[int]]: List of routes, each route is [0, x, num_customers + 1] for x in 1..num_customers.
         """
-        routes = []
+        routes: List[List[int]] = []
         for x in range(1, num_customers + 1):
             route = [0, x, num_customers + 1]
             routes.append(route)
@@ -111,6 +117,13 @@ class ColumnGenerationOrchestrator:
     def run(self, max_iterations: int = 50, tol: float = 1e-5):
         """
         Main CG loop.
+
+        Args:
+            max_iterations (int, optional): Maximum number of CG iterations. Defaults to 50.
+            tol (float, optional): Reduced cost tolerance for stopping. Defaults to 1e-5.
+
+        Returns:
+            Tuple[Any, Any]: Final objective value, variables from the master problem.
         """
         for iter_no in range(max_iterations):
             # Solve current restricted master problem
@@ -123,14 +136,14 @@ class ColumnGenerationOrchestrator:
             # Solve pricing/subproblem to get (potential) new column
 
             # dual_values is dict[str,float]
-            # dual_values should be dict[int, float] using the _map
-            dual_values_int = {}
+            # dual_values_int (to use in adjut_costs) should be dict[int, float] using the _map
+            dual_values_int: Dict[int, float] = {}
             for name, value in dual_values.items():
                 if name in self._map_constraint_name_to_int:
                     idx = self._map_constraint_name_to_int[name]
                     dual_values_int[idx] = value
-
             self.problem.adjust_costs(dual_values_int)
+
             labeling_results = self.labeling_solver.solve()
             if not labeling_results:
                 print(

@@ -39,7 +39,18 @@ VRPTW/
 ├── LICENSE
 └── README.md
 ```
+
 > **New:** See [`cg_orchestrator.py`](./cg_orchestrator.py) for the new high-level column generation workflow.
+
+---
+
+## Column Generation Flowchart
+
+The following diagram illustrates the column generation process, showing the interaction between the **Restricted Master Problem (RMP)** and the **Subproblem (ESPPRC)**:
+
+![Column Generation Flowchart](assets/cg_flowchart.png)
+
+_Figure: Flowchart of the column generation algorithm showing the interaction between the RMP and the subproblem (ESPPRC)._
 
 ---
 
@@ -49,6 +60,7 @@ VRPTW/
 
 The `ESPPRC` class defines a **generic framework** for solving Elementary Shortest Path Problems with Resource Constraints.  
 It handles:
+
 - Generic **label initialization** and **extension** via Resource Extension Functions (REFs)
 - **Feasibility checks** for all registered resources
 - **Dominance filtering** through the `Label` class
@@ -74,18 +86,18 @@ It handles:
       # Optional problem-specific fields (defined by subclasses)
    }
 ```
+
 > The following graph illustrates how such a `problem_data` structure translates into an ESPPTWC instance, where nodes, arcs, and resource windows correspond to the defined fields.
 
-![Problem Data Example](./assets/problem_data_2.png)
----
+## ![Problem Data Example](./assets/problem_data_2.png)
 
 ### 2. Label Class (`espprc/label.py`)
 
 The `Label` class represents a **partial path** (state) during the labeling process.
 
-* Stores **current node**, **path**, and a **resource dictionary** (`Dict[str, np.ndarray]`)
-* Implements its own **dominance rule** via `dominates(self, other)`
-* Supports deep copies of resource vectors for safe propagation
+- Stores **current node**, **path**, and a **resource dictionary** (`Dict[str, np.ndarray]`)
+- Implements its own **dominance rule** via `dominates(self, other)`
+- Supports deep copies of resource vectors for safe propagation
 
 Example structure:
 
@@ -104,12 +116,10 @@ Label(
 Implements the **Elementary Shortest Path Problem with Time Windows and Capacity** (ESPPTWC).
 This subclass registers **problem-specific REFs** for:
 
-* `time` (scalar, respecting node-dependent time windows)
-* `load` (vehicle capacity constraint)
-* `reduced_cost` (accumulated reduced cost)
-* `is_visited` (vector of visited customers)
-
-
+- `time` (scalar, respecting node-dependent time windows)
+- `load` (vehicle capacity constraint)
+- `reduced_cost` (accumulated reduced cost)
+- `is_visited` (vector of visited customers)
 
 ---
 
@@ -119,6 +129,7 @@ Implements a **generic labeling algorithm** to solve ESPPRC instances via the `L
 
 The `LabelingSolver` is now the entry point for solving the pricing problem during column generation.
 It exposes:
+
 - Multiple **label selection strategies** (FIFO/LIFO/min resource, etc.)
 - A `.solve()` method returning optimal or improving labels for the ESPPRC subproblem
 - Simple integration into the column generation workflow (see orchestrator below)
@@ -153,6 +164,7 @@ Key responsibilities of the **`ColumnGenerationOrchestrator`**:
 - Iteratively adds columns/routes until no negative reduced cost column exists (up to a specified tolerance or iteration limit)
 
 **Example usage:**
+
 ```python
 from src.cg_orchestrator import ColumnGenerationOrchestrator
 from src.espprc.problem_data import ESPPTWCProblemData, BaseResourceWindows
@@ -192,9 +204,9 @@ CPLEX implementation supporting fast solving of relaxed or (integral) master pro
 
 Three small **ESPPTWC test instances** are included to validate the labeling algorithm:
 
-* `problem_data_test_1`
-* `problem_data_test_2`
-* `problem_data_test_3`
+- `problem_data_test_1`
+- `problem_data_test_2`
+- `problem_data_test_3`
 
 Each defines a toy problem with capacity and time window constraints, useful for debugging and algorithm verification.
 
@@ -204,7 +216,7 @@ Each defines a toy problem with capacity and time window constraints, useful for
 
 The project will later leverage **Solomon benchmark instances** for VRPTW problems:
 
-> M. M. Solomon, *Algorithms for the Vehicle Routing and Scheduling Problems with Time Window Constraints*, Operations Research, 35(2), 1987.
+> M. M. Solomon, _Algorithms for the Vehicle Routing and Scheduling Problems with Time Window Constraints_, Operations Research, 35(2), 1987.
 
 These datasets will be parsed and converted into the above `problem_data` format via the `data_processing` module.
 
@@ -213,24 +225,25 @@ These datasets will be parsed and converted into the above `problem_data` format
 ## Future Directions
 
 1. **Support for More VRP Variants**
+
    - Develop and integrate additional VRP variants (e.g., VRPB, multi-depot, pickup and delivery), each as their own ESPPRC extension with corresponding master problem formulation.
    - Establish a plugin or registry mechanism for smooth integration and selection of new variants.
 
 2. **Solver Extensibility**
+
    - Add support for alternative linear/MIP solvers adhering to the `base_solver.py` interface (e.g., Gurobi, CBC, HiGHS), so users aren't limited to CPLEX.
    - Make the choice of solver straightforward and easily swappable.
 
 3. **Benchmarking and Scaling**
+
    - Prepare for evaluation on standard datasets like Solomon's VRPTW instances as the implementation matures.
 
 4. **API and Package Refactoring**
    - Reorganize subpackages and modules for greater clarity and a more intuitive user experience.
    - Provide clean APIs for problem setup, solution, and results retrieval.
 
-
 ---
 
 ## License
 
 This project is licensed under the **MIT License** – see the [LICENSE](./LICENSE) file for details.
-

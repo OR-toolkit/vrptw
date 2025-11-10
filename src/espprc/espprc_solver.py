@@ -1,6 +1,7 @@
 from typing import List, Dict, Callable
 from .label import Label
-from .base_espprc import ESPPRC
+from .espprc_model import EspprcModel
+
 
 
 class LabelingSolver:
@@ -14,7 +15,7 @@ class LabelingSolver:
 
     def __init__(
         self,
-        esspprc_problem: ESPPRC,
+        esspprc_problem: EspprcModel,
         label_selector: Callable[[Dict[int, List[Label]]], Label] = None,
     ):
         self.problem = esspprc_problem
@@ -101,7 +102,7 @@ class LabelingSolver:
             current_label = label_selector(unprocessed_labels)
             current_node = current_label.node
             # DEBUG
-            # print("-----")
+            print("-----")
             # print(f"let's extend path: {current_label.path} ...")
             unprocessed_labels[current_node].remove(current_label)
             for dest in self.problem.problem_data.graph.get(current_node, []):
@@ -109,10 +110,10 @@ class LabelingSolver:
                 # DEBUG
                 # print(f"what about {new_label.path}")
                 # print(f"it has {new_label.resources['reduced_cost'][0]} cost.")
+                print(f"it has {new_label.resources['is_visited'][0]} is visited.")
                 if new_label is None:
                     continue
                 if not self.problem.check_feasibility(new_label):
-                    # print("not feasible")
                     continue
                 # Dominance filtering
                 dominated = []

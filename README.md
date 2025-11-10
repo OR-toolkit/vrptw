@@ -19,25 +19,28 @@ The framework is designed to be **modular and extensible**, with a clear separat
 
 ```
 VRPTW/
-├── cg_orchestrator.py                # Column Generation orchestrator (top-level workflow)
-├── restricted_master_problems/
-│   └── set_covering.py               # RMP: Set covering master problem builder
-├── solvers/
-│   ├── base_solver.py                # Abstract solver interface for LP/MIP
-│   └── cplex_solver.py               # Concrete CPLEX solver implementation
-├── data/                             # Raw and processed datasets
-├── assets/                           # Visualizations of problem data
-├── data_processing/                  # Modules to parse and prepare problem data
-│   └── __init__.py
-├── espprc/                           # Core ESPPRC framework
-│   ├── __init__.py
-│   ├── base.py                       # Generic ESPPRC base class and Label definition
-│   ├── espptwc.py                    # ESPPTWC implementation (Time Windows + Capacity)
-│   ├── espprc_solver.py              # Labeling algorithm implementation, including LabelingSolver class
-│   ├── problem_data_test.py          # Small test instances for ESPPTWC
+├── src/
+│   ├── cg_orchestrator.py                # Column Generation orchestrator (top-level workflow)
+│   ├── restricted_master_problems/
+│   │   └── set_covering.py               # RMP: Set covering master problem builder
+│   ├── solvers/
+│   │   ├── base_solver.py                # Abstract solver interface for LP/MIP
+│   │   └── cplex_solver.py               # Concrete CPLEX solver implementation
+│   ├── data_processing/                  # Modules to parse and prepare problem data
+│   │   └── __init__.py
+│   └── espprc/                           # Core ESPPRC framework
+│       ├── __init__.py
+│       ├── base.py                       # Generic ESPPRC base class and Label definition
+│       ├── espptwc.py                    # ESPPTWC implementation (Time Windows + Capacity)
+│       ├── espprc_solver.py              # Labeling algorithm implementation
+│       └── problem_data_test.py          # Small test instances for ESPPTWC
+├── data/                                 # Solomon benchmark instances for testing and validation
 ├── .gitignore
+├── asssets
+├── .vscode
 ├── LICENSE
 └── README.md
+
 ```
 
 > **New:** See [`cg_orchestrator.py`](./cg_orchestrator.py) for the new high-level column generation workflow.
@@ -46,11 +49,7 @@ VRPTW/
 
 ## Column Generation Flowchart
 
-The following diagram illustrates the column generation process, showing the interaction between the **Restricted Master Problem (RMP)** and the **Subproblem (ESPPRC)**:
-
-![Column Generation Flowchart](assets/cg_flowchart.png)
-
-_Figure: Flowchart of the column generation algorithm showing the interaction between the RMP and the subproblem (ESPPRC)._
+- [Click Here](src/README.md)
 
 ---
 

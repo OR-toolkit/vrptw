@@ -1,41 +1,59 @@
-from .problem_data import BaseResourceWindows, ESPPTWCProblemData
-from ..test_data_instances import espptwc_test_1, espptwc_test_2, espptwc_test_3
+from .espprc_data import ESPPTWCProblemData
 
+espptwc_test_1 = {
+    "num_customers": 3,  # customers 1, 2, 3
+    "capacity": 10.0,
+    "time_windows": (
+        [0.0, 0.0, 0.0, 0.0, 0.0],  # lower bounds
+        [100.0, 20.0, 25.0, 40.0, 100.0],  # upper bounds
+    ),
+    # ---- Graph structure ----
+    "graph": {
+        0: [1, 2, 3],  # start depot can go to any customer
+        1: [2, 3, 4],  # customer 1 can go to 2, 3, or end depot
+        2: [3, 4],  # customer 2 can go to 3 or end depot
+        3: [4],  # customer 3 can only go to depot (end)
+        4: [],  # end depot
+    },
+    "costs": {
+        (0, 1): 3.0,
+        (0, 2): 6.0,
+        (0, 3): 7.0,
+        (1, 2): 2.0,
+        (1, 3): 5.0,
+        (1, 4): 8.0,
+        (2, 3): 1.0,
+        (2, 4): 3.0,
+        (3, 4): 2.0,
+    },
+    "travel_times": {
+        (0, 1): 6.0,
+        (0, 2): 10.0,
+        (0, 3): 12.0,
+        (1, 2): 8.0,
+        (1, 3): 15.0,
+        (1, 4): 5.0,
+        (2, 3): 4.0,
+        (2, 4): 6.0,
+        (3, 4): 5.0,
+    },
+    "demands": {
+        1: 4.0,
+        2: 7.0,  # makes some routes infeasible (e.g., 1→2→3 exceeds capacity)
+        3: 3.0,
+        4: 0.0,  # depot
+    },
+}
 
+# Also construct the ESPPTWCProblemData directly
 problem_instance_1 = ESPPTWCProblemData(
     num_customers=espptwc_test_1["num_customers"],
-    resource_windows=BaseResourceWindows(
-        constant=espptwc_test_1["resource_windows"]["constant"],
-        node_dependent=espptwc_test_1["resource_windows"]["node_dependent"],
-    ),
+    capacity=espptwc_test_1["capacity"],
     graph=espptwc_test_1["graph"],
     costs=espptwc_test_1["costs"],
     travel_times=espptwc_test_1["travel_times"],
     demands=espptwc_test_1["demands"],
-)
-
-problem_instance_2 = ESPPTWCProblemData(
-    num_customers=espptwc_test_2["num_customers"],
-    resource_windows=BaseResourceWindows(
-        constant=espptwc_test_2["resource_windows"]["constant"],
-        node_dependent=espptwc_test_2["resource_windows"]["node_dependent"],
-    ),
-    graph=espptwc_test_2["graph"],
-    costs=espptwc_test_2["costs"],
-    travel_times=espptwc_test_2["travel_times"],
-    demands=espptwc_test_2["demands"],
-)
-
-problem_instance_3 = ESPPTWCProblemData(
-    num_customers=espptwc_test_3["num_customers"],
-    resource_windows=BaseResourceWindows(
-        constant=espptwc_test_3["resource_windows"]["constant"],
-        node_dependent=espptwc_test_3["resource_windows"]["node_dependent"],
-    ),
-    graph=espptwc_test_3["graph"],
-    costs=espptwc_test_3["costs"],
-    travel_times=espptwc_test_3["travel_times"],
-    demands=espptwc_test_3["demands"],
+    time_windows=espptwc_test_1["time_windows"],
 )
 
 
@@ -43,9 +61,9 @@ def espptwc_basic_example():
     """
     Example showcasing label extension, feasibility, and dominance checks for ESPPTWCProblemData/ESPPTWC instance.
     """
-    from .espptwc import ESPPTWC
+    from .espptwc_model import EspptwcModel
 
-    espptwc = ESPPTWC(problem_instance_1)
+    espptwc = EspptwcModel(problem_instance_1)
     depot_label = espptwc.initialize_label()
     print("Initial depot label resources:")
     for r, val in depot_label.resources.items():
@@ -118,10 +136,10 @@ def labeling_algorithm_basic_example():
     """
     Example showing usage of the LabelingSolver class and printing the best labels/resources.
     """
-    from .espptwc import ESPPTWC
+    from .espptwc_model import EspptwcModel
     from .espprc_solver import LabelingSolver
 
-    espptwc = ESPPTWC(problem_instance_1)
+    espptwc = EspptwcModel(problem_instance_1)
     min_label_selector = LabelingSolver.make_min_resource_selector(resource_name="time")
     solver = LabelingSolver(espptwc, label_selector=min_label_selector)
     best_labels, _ = solver.solve()
@@ -129,13 +147,7 @@ def labeling_algorithm_basic_example():
     print("Results:")
     for label in best_labels:
         resources = label.resources
-        reduced_cost = resources["reduced_cost"][0]
-        load = resources["load"][0]
-        time = resources["time"][0]
-        path = label.path
-        print(
-            f"  Reduced_Cost: {reduced_cost}, Load: {load}, Time: {time}, Path: {path}"
-        )
+        print(f"resources {resources}")
 
 
 if __name__ == "__main__":

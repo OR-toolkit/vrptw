@@ -1,6 +1,9 @@
 from ..model import Model
 from .cplex_solver import CplexSolver
 from ..restricted_master_problems.set_covering import build_set_covering_problem
+import logging
+
+logging.getLogger("src.solvers.base_solver").setLevel(logging.DEBUG)
 
 
 def create_simple_model():
@@ -15,6 +18,7 @@ def create_simple_model():
 def test_cplex_solver(model: Model):
     """Test the CPLEX solver with a simple model."""
     solver = CplexSolver(model)
+
     result = solver.solve()
     print(f"Solution: {result}")
 
@@ -60,7 +64,7 @@ def test_set_covering_with_paths_cplex():
     The cost and cover matrix are built from these explicit paths for espptwc_test_1 / problem_instance_1.
     """
     from src.espprc.examples import problem_instance_1
-    from src.espprc.espptwc import ESPPTWC
+    from src.espprc.espptwc_model import EspptwcModel
 
     # Paths (columns)
     paths = [
@@ -81,8 +85,8 @@ def test_set_covering_with_paths_cplex():
         cover_matrix.append(row)
 
     # Compute costs for each path using ESPPTWC.path_cost
-    espptwc = ESPPTWC(problem_instance_1)
-    costs = [espptwc.path_cost(path) for path in paths]
+    espptwc_model = EspptwcModel(problem_instance_1)
+    costs = [espptwc_model.path_cost(path) for path in paths]
 
     # Build and solve the set covering problem (relaxed, not partitioned)
     model = build_set_covering_problem(
@@ -93,11 +97,13 @@ def test_set_covering_with_paths_cplex():
 
 
 if __name__ == "__main__":
-    print("creating a simple model")
+    print("\n", 10 * "-", "creating a simple model", 10 * "-")
     model = create_simple_model()
-    print("test the cplex solver updating model functionality")
+    print(
+        "\n", 10 * "-", "test the cplex solver updating model functionality", 10 * "-"
+    )
     test_cplex_solver_adding(model)
-    print("test solving set covering")
+    print("\n", 10 * "-", "test solving set covering", 10 * "-")
     test_solving_set_covering()
-    print("----\ntest on a VRPTW context")
+    print("\n", 10 * "-", "test on a VRPTW context", 10 * "-")
     test_set_covering_with_paths_cplex()

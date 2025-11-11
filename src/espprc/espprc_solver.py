@@ -1,7 +1,7 @@
 from typing import List, Dict, Callable
 from .label import Label
 from .espprc_model import EspprcModel
-
+import logging
 
 
 class LabelingSolver:
@@ -18,6 +18,13 @@ class LabelingSolver:
         esspprc_problem: EspprcModel,
         label_selector: Callable[[Dict[int, List[Label]]], Label] = None,
     ):
+        self.logger = logging.getLogger(__name__)
+        if not self.logger.handlers:
+            ch = logging.StreamHandler()
+            formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
+            ch.setFormatter(formatter)
+            self.logger.addHandler(ch)
+
         self.problem = esspprc_problem
         # If selector not given, use FIFO by default
         self.label_selector = (
@@ -85,35 +92,41 @@ class LabelingSolver:
         labels_at_node[start_node].append(start_label)
         unprocessed_labels[start_node].append(start_label)
 
-        # iteration = 0
+        iteration = 0
         while any(unprocessed_labels[i] for i in range(num_nodes)):
-            # DEBUG
-            # print("-" * 25)
-            # print(f"labeling iteration {iteration}:")
-            # iteration += 1
-            # all_unprocessed_labels = [
-            #     label
-            #     for label_list in unprocessed_labels.values()
-            #     for label in label_list
-            # ]
-            # print(
-            #     f"unprocessed paths: {[label.path for label in all_unprocessed_labels]}"
-            # )
+            self.logger.debug("Labeling iteration %d started.", iteration)
+            current_unprocessed = [
+                label
+                for label_list in unprocessed_labels.values()
+                for label in label_list
+            ]
+            self.logger.debug(
+                "Current unprocessed label paths: %s",
+                [label.path for label in current_unprocessed],
+            )
             current_label = label_selector(unprocessed_labels)
             current_node = current_label.node
-            # DEBUG
-            print("-----")
-            # print(f"let's extend path: {current_label.path} ...")
+            self.logger.debug(
+                "Extending label at node %d with path %s.",
+                current_node,
+                current_label.path,
+            )
             unprocessed_labels[current_node].remove(current_label)
             for dest in self.problem.problem_data.graph.get(current_node, []):
                 new_label = self.problem.extend_label(current_label, dest)
-                # DEBUG
-                # print(f"what about {new_label.path}")
-                # print(f"it has {new_label.resources['reduced_cost'][0]} cost.")
-                print(f"it has {new_label.resources['is_visited'][0]} is visited.")
                 if new_label is None:
                     continue
+                self.logger.debug(
+                    "Generated label for destination node %d with path %s (reduced cost: %.2f).",
+                    dest,
+                    new_label.path,
+                    new_label.resources["reduced_cost"][0],
+                )
                 if not self.problem.check_feasibility(new_label):
+                    self.logger.debug(
+                        "Label for path %s rejected by feasibility check.",
+                        new_label.path,
+                    )
                     continue
                 # Dominance filtering
                 dominated = []
@@ -122,29 +135,41 @@ class LabelingSolver:
                         continue
                     elif new_label.dominates(label):
                         dominated.append(label)
-                # Remove dominated labels
-                for label in dominated:
-                    # print(f"removing label with path {label.path}")
-                    labels_at_node[dest].remove(label)
-                    if label in unprocessed_labels[dest]:
-                        unprocessed_labels[dest].remove(label)
-                labels_at_node[dest].append(new_label)
-                unprocessed_labels[dest].append(new_label)
+                else:
+                    for label in dominated:
+                        self.logger.debug(
+                            "Removing dominated label at destination node %d with path %s.",
+                            dest,
+                            label.path,
+                        )
+                        labels_at_node[dest].remove(label)
+                        if label in unprocessed_labels[dest]:
+                            unprocessed_labels[dest].remove(label)
+                    labels_at_node[dest].append(new_label)
+                    unprocessed_labels[dest].append(new_label)
+            iteration += 1
 
         end_node = num_nodes - 1
         final_labels = labels_at_node[end_node]
         if not final_labels:
+            self.logger.debug(
+                "No feasible labels found at the end node. Returning empty result."
+            )
             return []
         min_reduced_cost = min(
             label.resources["reduced_cost"][0] for label in final_labels
         )
-        # DEBUG
-        # print("labeling rusults")
-        # print("paths:", [label.path for label in final_labels])
-
+        self.logger.info(
+            "Feasible paths at end node: %s", [label.path for label in final_labels]
+        )
         best_labels = [
             label
             for label in final_labels
             if label.resources["reduced_cost"][0] == min_reduced_cost
         ]
+        self.logger.info(
+            "Number of least reduced cost labels: %d (minimum reduced cost: %.2f).",
+            len(best_labels),
+            min_reduced_cost,
+        )
         return best_labels, min_reduced_cost

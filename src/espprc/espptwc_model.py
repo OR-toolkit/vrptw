@@ -157,6 +157,5 @@ class EspptwcModel(EspprcModel):
             np.ndarray: Updated is_visited vector.
         """
         is_visited = current_resources["is_visited"].copy()
-        print(is_visited)
         is_visited[dest] = 1.0
         return is_visited

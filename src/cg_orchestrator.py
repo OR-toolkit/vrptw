@@ -9,10 +9,12 @@ Column Generation (CG) Orchestrator for Vehicle Routing Problems (VRP) and Varia
 """
 
 from typing import Dict, List, Optional, Any
-from src.restricted_master_problems.set_covering import build_set_covering_problem
-from src.espprc.problem_data import ESPPRCBaseProblemData
-from src.espprc.espptwc import ESPPTWC
+import logging
 from src.solvers.cplex_solver import CplexSolver
+from src.restricted_master_problems.set_covering import build_set_covering_problem
+from src.espprc.espprc_data import ESPPRCBaseProblemData
+from src.espprc.espprc_model import EspprcModel
+from src.espprc.espptwc_model import EspptwcModel
 from src.espprc.espprc_solver import LabelingSolver
 
 
@@ -29,8 +31,20 @@ class ColumnGenerationOrchestrator:
             problem_data (ESPPRCBaseProblemData): The ESPPRC problem data instance.
             initial_routes (Optional[List[List[int]]]): Optional list of initial routes. Each route is a list of node indices.
         """
+        self.logger = logging.getLogger(__name__)
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(name)s - %(levelname)s - %(message)s",
+        )
+        logging.getLogger("src.solvers.base_solver").setLevel(logging.INFO)
+        logging.getLogger("src.espprc.espprc_solver").setLevel(logging.INFO)
+        if not self.logger.handlers:
+            ch = logging.StreamHandler()
+            self.logger.addHandler(ch)
+
         self.problem_data: ESPPRCBaseProblemData = problem_data
-        self.problem: ESPPTWC = ESPPTWC(self.problem_data)
+        self.problem: EspprcModel
+        self.problem = EspptwcModel(self.problem_data)
         self.routes: List[List[int]] = (
             initial_routes if initial_routes is not None else []
         )
@@ -54,13 +68,16 @@ class ColumnGenerationOrchestrator:
         Returns:
             Any: The initialized restricted master problem model.
         """
-        # solver of pricing problems
-
         if not self.routes:
+            self.logger.debug(
+                "No initial routes provided. Generating trivial variables for RMP initialization."
+            )
             self.routes = self._generate_trivial_variables(
                 self.problem_data.num_customers
             )
         costs = [self.problem.path_cost(route) for route in self.routes]
+        self.logger.debug(f"Initial routes: {self.routes}")
+        self.logger.debug(f"Initial costs: {costs}")
 
         # Build the cover matrix: for each customer (row), does this route (column) visit it? 1 if yes, else 0.
         num_customers: int = self.problem_data.num_customers
@@ -71,10 +88,12 @@ class ColumnGenerationOrchestrator:
                 # route[1:-1] excludes depots (first and last node)
                 row.append(1 if customer in route[1:-1] else 0)
             cover_matrix.append(row)
+        self.logger.debug(f"Constructed cover matrix: {cover_matrix}")
 
         restricted_master_model = build_set_covering_problem(
             cover_matrix, costs, partitioned=False, relaxed=True
         )
+        self.logger.debug("Restricted master problem initialized.")
         return restricted_master_model
 
     @staticmethod
@@ -125,13 +144,16 @@ class ColumnGenerationOrchestrator:
         Returns:
             Tuple[Any, Any]: Final objective value, variables from the master problem.
         """
+        logger = self.logger
         for iter_no in range(max_iterations):
             # Solve current restricted master problem
             objective_value, variables, dual_values = self.rmp_solver.solve()
-            print(20 * "=", f"iteration {iter_no}", 20 * "=")
-            # print("Objective:", objective_value)
-            # print("Variables:", variables)
-            # print("Duals:", dual_values)
+            logger.debug(
+                "%s Column Generation Iteration %d %s", "=" * 20, iter_no, "=" * 20
+            )
+            logger.debug("Objective: %s", objective_value)
+            logger.debug("Variables: %s", variables)
+            logger.debug("Dual values: %s", dual_values)
 
             # Solve pricing/subproblem to get (potential) new column
 
@@ -142,56 +164,71 @@ class ColumnGenerationOrchestrator:
                 if name in self._map_constraint_name_to_int:
                     idx = self._map_constraint_name_to_int[name]
                     dual_values_int[idx] = value
+            logger.debug(
+                "Converted dual_values (string) to (int) indices for pricing: %s",
+                dual_values_int,
+            )
             self.problem.adjust_costs(dual_values_int)
 
             labeling_results = self.labeling_solver.solve()
             if not labeling_results:
-                print(
+                logger.info(
                     f"No improving column found at iteration {iter_no}. Terminating CG."
                 )
                 break
             labels, reduced_cost = labeling_results
             chosen_path = labels[0].path
+            logger.debug(
+                "Obtained new label: path=%s, reduced_cost=%.6f",
+                chosen_path,
+                reduced_cost,
+            )
             col_coeffs = self._translate_path_to_col_coeffs(chosen_path)
             obj_coeff = self.problem.path_cost(chosen_path)
             # Check reduced cost: stop if not negative enough
             if reduced_cost >= -tol:
-                print(
+                logger.info(
                     f"Reduced cost above tolerance at iteration {iter_no}: {reduced_cost} >= {-tol}. Stopping."
                 )
                 break
-            print(f"reduced_cost: {reduced_cost}")
+            logger.debug(f"Adding column with reduced_cost = {reduced_cost:.6f}")
             # Add new variable (column) to master
             num_variables = len(self.rmp_solver.model.variables)
             var_name = f"p_{num_variables}"
-            # print(f"all variables{self.rmp_solver.model.variables.keys()}")
-            # print(f"introducing {var_name}: {chosen_label.path} ")
+            logger.debug(
+                "Introducing new variable %s for path %s (coeff = %.6f)",
+                var_name,
+                chosen_path,
+                obj_coeff,
+            )
+            # logger.debug(f"all variables: {list(self.rmp_solver.model.variables.keys())}")
+            # logger.debug(f"introducing {var_name}: {chosen_path} ")
             self.rmp_solver.add_variable(
                 name=var_name, obj_coeff=obj_coeff, col_coeffs=col_coeffs
             )
         else:
-            print("Column Generation reached iteration limit!")
+            logger.info("Column Generation reached iteration limit!")
         # Return final master problem solution
+        logger.debug("Final RMP objective: %s", objective_value)
+        logger.debug("Final RMP variables: %s", variables)
         return objective_value, variables
 
 
 if __name__ == "__main__":
-    from .espprc.problem_data import BaseResourceWindows, ESPPTWCProblemData
+    from .espprc.espprc_data import ESPPTWCProblemData
     from .test_data_instances import espptwc_test_longest_path
 
     # Example: How to use ColumnGenerationOrchestrator, runs column generation with example problem data
+
+    # Also construct the ESPPTWCProblemData directly
     problem_data = ESPPTWCProblemData(
         num_customers=espptwc_test_longest_path["num_customers"],
-        resource_windows=BaseResourceWindows(
-            constant=espptwc_test_longest_path["resource_windows"]["constant"],
-            node_dependent=espptwc_test_longest_path["resource_windows"][
-                "node_dependent"
-            ],
-        ),
+        capacity=espptwc_test_longest_path["capacity"],
         graph=espptwc_test_longest_path["graph"],
         costs=espptwc_test_longest_path["costs"],
         travel_times=espptwc_test_longest_path["travel_times"],
         demands=espptwc_test_longest_path["demands"],
+        time_windows=espptwc_test_longest_path["time_windows"],
     )
 
     # Instantiate the CG orchestrator with sample problem data and run the column generation algorithm

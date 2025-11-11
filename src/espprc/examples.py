@@ -1,49 +1,8 @@
 from .espprc_data import ESPPTWCProblemData
+from ..test_data_instances import espptwc_test_1
+import logging
 
-espptwc_test_1 = {
-    "num_customers": 3,  # customers 1, 2, 3
-    "capacity": 10.0,
-    "time_windows": (
-        [0.0, 0.0, 0.0, 0.0, 0.0],  # lower bounds
-        [100.0, 20.0, 25.0, 40.0, 100.0],  # upper bounds
-    ),
-    # ---- Graph structure ----
-    "graph": {
-        0: [1, 2, 3],  # start depot can go to any customer
-        1: [2, 3, 4],  # customer 1 can go to 2, 3, or end depot
-        2: [3, 4],  # customer 2 can go to 3 or end depot
-        3: [4],  # customer 3 can only go to depot (end)
-        4: [],  # end depot
-    },
-    "costs": {
-        (0, 1): 3.0,
-        (0, 2): 6.0,
-        (0, 3): 7.0,
-        (1, 2): 2.0,
-        (1, 3): 5.0,
-        (1, 4): 8.0,
-        (2, 3): 1.0,
-        (2, 4): 3.0,
-        (3, 4): 2.0,
-    },
-    "travel_times": {
-        (0, 1): 6.0,
-        (0, 2): 10.0,
-        (0, 3): 12.0,
-        (1, 2): 8.0,
-        (1, 3): 15.0,
-        (1, 4): 5.0,
-        (2, 3): 4.0,
-        (2, 4): 6.0,
-        (3, 4): 5.0,
-    },
-    "demands": {
-        1: 4.0,
-        2: 7.0,  # makes some routes infeasible (e.g., 1→2→3 exceeds capacity)
-        3: 3.0,
-        4: 0.0,  # depot
-    },
-}
+logging.getLogger("src.espprc.espprc_solver").setLevel(logging.DEBUG)
 
 # Also construct the ESPPTWCProblemData directly
 problem_instance_1 = ESPPTWCProblemData(

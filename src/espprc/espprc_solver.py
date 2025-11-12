@@ -19,16 +19,19 @@ class LabelingSolver:
         label_selector: Callable[[Dict[int, List[Label]]], Label] = None,
     ):
         self.logger = logging.getLogger(__name__)
-        if not self.logger.handlers:
-            ch = logging.StreamHandler()
-            formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
-            ch.setFormatter(formatter)
-            self.logger.addHandler(ch)
+        # if not self.logger.handlers:
+        #     ch = logging.StreamHandler()
+        #     formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
+        #     ch.setFormatter(formatter)
+        #     self.logger.addHandler(ch)
 
         self.problem = esspprc_problem
         # If selector not given, use FIFO by default
         self.label_selector = (
             label_selector if label_selector is not None else self.fifo_selector
+        )
+        self.logger.info(
+            "Initialized LabelingSolver for problem: %s", type(self.problem).__name__
         )
 
     @staticmethod
@@ -123,23 +126,20 @@ class LabelingSolver:
                     new_label.resources["reduced_cost"][0],
                 )
                 if not self.problem.check_feasibility(new_label):
-                    self.logger.debug(
-                        "Label for path %s rejected by feasibility check.",
-                        new_label.path,
-                    )
+                    self.logger.debug("Label rejected by feasibility check.")
                     continue
                 # Dominance filtering
                 dominated = []
                 for label in labels_at_node[dest]:
                     if label.dominates(new_label):
+                        self.logger.debug("Label dominated by %s.", label.path)
                         continue
                     elif new_label.dominates(label):
                         dominated.append(label)
                 else:
                     for label in dominated:
                         self.logger.debug(
-                            "Removing dominated label at destination node %d with path %s.",
-                            dest,
+                            "The new label dominates %s.",
                             label.path,
                         )
                         labels_at_node[dest].remove(label)
@@ -147,6 +147,8 @@ class LabelingSolver:
                             unprocessed_labels[dest].remove(label)
                     labels_at_node[dest].append(new_label)
                     unprocessed_labels[dest].append(new_label)
+                    self.logger.debug("Label %s added the queue.", new_label.path)
+
             iteration += 1
 
         end_node = num_nodes - 1
@@ -158,9 +160,6 @@ class LabelingSolver:
             return []
         min_reduced_cost = min(
             label.resources["reduced_cost"][0] for label in final_labels
-        )
-        self.logger.info(
-            "Feasible paths at end node: %s", [label.path for label in final_labels]
         )
         best_labels = [
             label

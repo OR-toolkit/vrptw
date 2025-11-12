@@ -47,3 +47,11 @@ class Label:
             if np.any(value_self > value_other):
                 return False
         return True
+
+    def __repr__(self) -> str:
+        resource_str = ", ".join(
+            f"{k}={np.round(v, 2).tolist()}" for k, v in self.resources.items()
+        )
+        return (
+            f"Label(node={self.node}, path={self.path}, resources={{ {resource_str} }})\n \n \n "
+        )

@@ -101,6 +101,13 @@ def labeling_algorithm_basic_example():
     espptwc = EspptwcModel(problem_instance_1)
     min_label_selector = LabelingSolver.make_min_resource_selector(resource_name="time")
     solver = LabelingSolver(espptwc, label_selector=min_label_selector)
+
+    if not solver.logger.handlers:
+        ch = logging.StreamHandler()
+        formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
+        ch.setFormatter(formatter)
+        solver.logger.addHandler(ch)
+
     best_labels, _ = solver.solve()
 
     print("Results:")

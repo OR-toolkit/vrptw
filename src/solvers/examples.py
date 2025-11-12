@@ -6,6 +6,7 @@ import logging
 logging.getLogger("src.solvers.base_solver").setLevel(logging.DEBUG)
 
 
+
 def create_simple_model():
     model = Model(name="simple_LP")
     model.add_variable("x", obj_coeff=3, lb=0)
@@ -18,6 +19,11 @@ def create_simple_model():
 def test_cplex_solver(model: Model):
     """Test the CPLEX solver with a simple model."""
     solver = CplexSolver(model)
+    if not solver.logger.handlers:
+        ch = logging.StreamHandler()
+        formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
+        ch.setFormatter(formatter)
+        solver.logger.addHandler(ch)
 
     result = solver.solve()
     print(f"Solution: {result}")

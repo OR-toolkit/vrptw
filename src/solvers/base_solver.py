@@ -9,11 +9,11 @@ class BaseSolver(ABC):
 
     def __init__(self, model: Optional[Model] = None):
         self.logger = logging.getLogger(__name__)
-        if not self.logger.handlers:
-            ch = logging.StreamHandler()
-            formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
-            ch.setFormatter(formatter)
-            self.logger.addHandler(ch)
+        # if not self.logger.handlers:
+        #     ch = logging.StreamHandler()
+        #     formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
+        #     ch.setFormatter(formatter)
+        #     self.logger.addHandler(ch)
 
         self.model = model or Model()
         self.logger.debug(

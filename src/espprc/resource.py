@@ -53,9 +53,9 @@ class ResourceDef:
         Creates a ResourceDef with constant time/load windows across all nodes.
         All bounds are  (shape [num_nodes][resource_dim]).
         """
-        lower_bounds = np.tile(lower, (10, 1))
+        lower_bounds = np.tile(lower, (num_nodes, 1))
         lower_bounds = np.array(lower_bounds, dtype=float)
-        upper_bounds = np.tile(upper, (10, 1))
+        upper_bounds = np.tile(upper, (num_nodes, 1))
         upper_bounds = np.array(upper_bounds, dtype=float)
 
         if initial_resource_at_start is not None:

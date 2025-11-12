@@ -80,7 +80,9 @@ class EspprcModel(ABC):
             else:
                 # No windows, no start value: zero vector of length 1 (fallback)
                 resources[name] = np.zeros(1, dtype=float)
-        return Label(node=start_node, resources=resources)
+        label = Label(node=start_node, resources=resources)
+        ###################
+        return label
 
     def extend_label(self, label: Label, destination: int) -> Label:
         """
@@ -131,3 +133,28 @@ class EspprcModel(ABC):
             self.problem_data.costs[(path[i], path[i + 1])]
             for i in range(len(path) - 1)
         )
+    
+    def __repr__(self) -> str:
+        cls_name = self.__class__.__name__
+        info = [f"<{cls_name}>"]
+        info.append(f"Num customers: {getattr(self.problem_data, 'num_customers', '?')}")
+        info.append(f"Capacity: {getattr(self.problem_data, 'capacity', '?')}")
+        info.append(f"Resources: {list(self.resources.keys())}")
+        # Summarize graph size without displaying nodes
+        graph = getattr(self.problem_data, "graph", None)
+        if graph is not None:
+            info.append(f"Graph: {len(graph)} nodes")
+        # Summarize costs if present
+        costs = getattr(self.problem_data, "costs", None)
+        if costs:
+            info.append(f"Costs: {len(costs)} arcs")
+        # Demands and time windows if they exist in problem_data
+        demands = getattr(self.problem_data, "demands", None)
+        if demands:
+            info.append(f"Demands: {len(demands)} nodes")
+        time_windows = getattr(self.problem_data, "time_windows", None)
+        if time_windows and isinstance(time_windows, tuple):
+            tw_len = len(time_windows[0])
+            info.append(f"Time windows: {tw_len} nodes")
+        return "\n".join(info)
+

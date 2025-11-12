@@ -22,6 +22,7 @@ class ColumnGenerationOrchestrator:
     def __init__(
         self,
         problem_data: ESPPRCBaseProblemData,
+        model: EspprcModel = None,
         initial_routes: Optional[List[List[int]]] = None,
     ) -> None:
         """
@@ -33,33 +34,54 @@ class ColumnGenerationOrchestrator:
         """
         self.logger = logging.getLogger(__name__)
         logging.basicConfig(
+            filename='app.log',            # name of the log file
             level=logging.INFO,
             format="%(name)s - %(levelname)s - %(message)s",
         )
-        logging.getLogger("src.solvers.base_solver").setLevel(logging.INFO)
-        logging.getLogger("src.espprc.espprc_solver").setLevel(logging.INFO)
+        logging.getLogger("src.solvers.base_solver").setLevel(logging.DEBUG)
+        logging.getLogger("src.espprc.espprc_solver").setLevel(logging.DEBUG)
         if not self.logger.handlers:
             ch = logging.StreamHandler()
             self.logger.addHandler(ch)
 
         self.problem_data: ESPPRCBaseProblemData = problem_data
-        self.problem: EspprcModel
-        self.problem = EspptwcModel(self.problem_data)
-        self.routes: List[List[int]] = (
-            initial_routes if initial_routes is not None else []
-        )
+
+        if model is None:
+            self.model = EspptwcModel(self.problem_data)
+        else:
+            self.model = model
+
+        # Initialize routes: use provided initial_routes if any, otherwise generate trivial (dummy) variables.
+        if initial_routes is not None and len(initial_routes) > 0:
+            self.routes: List[List[int]] = initial_routes
+        else:
+            self.logger.debug(
+                "No initial routes provided. Generating trivial variables for RMP initialization."
+            )
+            self.routes = self._generate_trivial_variables(
+                self.problem_data.num_customers
+            )
+        # Map from variable name to path used to create it
+        self.varname_to_path: Dict[str, list] = {}
+        for j, route in enumerate(self.routes):
+            self.varname_to_path[f"p_{j}"] = route
+
+        # Map constraint names like "cover_element_5" to their corresponding integer (e.g., 5)
+        self._map_constraint_name_to_int: Dict[str, int] = {}
         self.labeling_solver: LabelingSolver = LabelingSolver(
-            self.problem,
+            self.model,
             label_selector=LabelingSolver.make_min_resource_selector("reduced_cost"),
         )
         self.restricted_master_model = self._initialize_restricred_master_problem()
         self.rmp_solver = CplexSolver(self.restricted_master_model)
 
-        # Map constraint names like "cover_element_5" to their corresponding integer (e.g., 5)
-        self._map_constraint_name_to_int: Dict[str, int] = {}
         for constraint_name in self.restricted_master_model.constraints:
             num = int(constraint_name.split("_")[-1])
             self._map_constraint_name_to_int[constraint_name] = num
+        self.logger.info(
+            "ColumnGenerationOrchestrator initialized with problem data: %s",
+            type(self.problem_data).__name__,
+        )
 
     def _initialize_restricred_master_problem(self) -> Any:
         """
@@ -68,14 +90,7 @@ class ColumnGenerationOrchestrator:
         Returns:
             Any: The initialized restricted master problem model.
         """
-        if not self.routes:
-            self.logger.debug(
-                "No initial routes provided. Generating trivial variables for RMP initialization."
-            )
-            self.routes = self._generate_trivial_variables(
-                self.problem_data.num_customers
-            )
-        costs = [self.problem.path_cost(route) for route in self.routes]
+        costs = [self.model.path_cost(route) for route in self.routes]
         self.logger.debug(f"Initial routes: {self.routes}")
         self.logger.debug(f"Initial costs: {costs}")
 
@@ -142,17 +157,18 @@ class ColumnGenerationOrchestrator:
             tol (float, optional): Reduced cost tolerance for stopping. Defaults to 1e-5.
 
         Returns:
-            Tuple[Any, Any]: Final objective value, variables from the master problem.
+            Tuple[Any, Any]: Final objective value, and a dictionary {var_name: (value, path)} for nonzero variables.
         """
         logger = self.logger
+
         for iter_no in range(max_iterations):
             # Solve current restricted master problem
             objective_value, variables, dual_values = self.rmp_solver.solve()
             logger.debug(
                 "%s Column Generation Iteration %d %s", "=" * 20, iter_no, "=" * 20
             )
-            logger.debug("Objective: %s", objective_value)
-            logger.debug("Variables: %s", variables)
+            logger.debug("Objective value: %s", objective_value)
+            logger.debug("Number of variables: %d", len(variables))
             logger.debug("Dual values: %s", dual_values)
 
             # Solve pricing/subproblem to get (potential) new column
@@ -168,7 +184,7 @@ class ColumnGenerationOrchestrator:
                 "Converted dual_values (string) to (int) indices for pricing: %s",
                 dual_values_int,
             )
-            self.problem.adjust_costs(dual_values_int)
+            self.model.adjust_costs(dual_values_int)
 
             labeling_results = self.labeling_solver.solve()
             if not labeling_results:
@@ -184,7 +200,7 @@ class ColumnGenerationOrchestrator:
                 reduced_cost,
             )
             col_coeffs = self._translate_path_to_col_coeffs(chosen_path)
-            obj_coeff = self.problem.path_cost(chosen_path)
+            obj_coeff = self.model.path_cost(chosen_path)
             # Check reduced cost: stop if not negative enough
             if reduced_cost >= -tol:
                 logger.info(
@@ -201,22 +217,38 @@ class ColumnGenerationOrchestrator:
                 chosen_path,
                 obj_coeff,
             )
-            # logger.debug(f"all variables: {list(self.rmp_solver.model.variables.keys())}")
-            # logger.debug(f"introducing {var_name}: {chosen_path} ")
             self.rmp_solver.add_variable(
                 name=var_name, obj_coeff=obj_coeff, col_coeffs=col_coeffs
             )
+            self.varname_to_path[var_name] = list(chosen_path)  # make a copy to be sure
+
         else:
             logger.info("Column Generation reached iteration limit!")
         # Return final master problem solution
         logger.debug("Final RMP objective: %s", objective_value)
         logger.debug("Final RMP variables: %s", variables)
-        return objective_value, variables
+
+        # Only return nonzero variables, along with their path
+        nonzero_results = {
+            var_name: (value, self.varname_to_path.get(var_name))
+            for var_name, value in variables.items()
+            if abs(value) > 1e-8  # consider "nonzero"
+        }
+        for var_name, (value, path) in nonzero_results.items():
+            self.logger.info(
+                "Variable: %s | Path: %s | Value: %.2f", var_name, path, value
+            )
+        self.logger.info(
+            "Objective value: %.2f | Number of nonzero variables: %d",
+            objective_value,
+            len(nonzero_results),
+        )
+        return objective_value, nonzero_results
 
 
 if __name__ == "__main__":
     from .espprc.espprc_data import ESPPTWCProblemData
-    from .test_data_instances import espptwc_test_longest_path
+    from .test_data_instances import espptwc_test_1 as espptwc_test_longest_path
 
     # Example: How to use ColumnGenerationOrchestrator, runs column generation with example problem data
 
@@ -233,8 +265,15 @@ if __name__ == "__main__":
 
     # Instantiate the CG orchestrator with sample problem data and run the column generation algorithm
     orchestrator = ColumnGenerationOrchestrator(problem_data)
-    result = orchestrator.run(max_iterations=50)
+    objective_value, nonzero_results = orchestrator.run(max_iterations=50)
 
     # Print the final master problem solution
+    print(40 * "=")
     print("Final master problem solution:")
-    print(result)
+    print(40 * "=")
+
+    for var_name, (value, path) in nonzero_results.items():
+        print(f"Variable: {var_name} | Path: {path} | Value: {value:.2f}")
+    print(
+        f"Objective value: {objective_value:.2f} | Num of Needed Vehicules: {len(nonzero_results)}"
+    )

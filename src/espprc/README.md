@@ -35,7 +35,7 @@ Consider a network with 5 nodes (0: origin, 4: destination, 1-3: customers), whe
 ### Step 0: Initialization
 
 <div align="center">
-  <img src="assets/labeling/step0.png" alt="Initialization" width="700"/>
+  <img src="../../assets/labeling_algorithm/step0.png" alt="Initialization" width="700"/>
 </div>
 
 Initialize with a single label at the origin node 0.
@@ -43,7 +43,7 @@ Initialize with a single label at the origin node 0.
 ### Step 1: First Extensions
 
 <div align="center">
-  <img src="assets/labeling/step1.png" alt="First Extensions" width="700"/>
+  <img src="../../assets/labeling_algorithm/step1.png" alt="First Extensions" width="700"/>
 </div>
 
 Extend the initial label to all reachable neighbors. Three feasible labels are created at nodes 1, 2, and 3.
@@ -51,7 +51,7 @@ Extend the initial label to all reachable neighbors. Three feasible labels are c
 ### Step 2: Extending Further
 
 <div align="center">
-  <img src="assets/labeling/step2.png" alt="Second Iteration" width="700"/>
+  <img src="../../assets/labeling_algorithm/step2.png" alt="Second Iteration" width="700"/>
 </div>
 
 Select the label with minimum time (node 1) and extend. Note that extending to node 2 is **infeasible** due to capacity violation (4 + 7 = 11 > 10).
@@ -59,7 +59,7 @@ Select the label with minimum time (node 1) and extend. Note that extending to n
 ### Step 3: Dominance
 
 <div align="center">
-  <img src="assets/labeling/step3.png" alt="Dominance Example" width="700"/>
+  <img src="../../assets/labeling_algorithm/step3.png" alt="Dominance Example" width="700"/>
 </div>
 
 When multiple labels reach the same node, **dominance rules** eliminate inferior labels. A label dominates another if it has lower cost, time, and capacity while visiting a subset of nodes.
@@ -67,7 +67,7 @@ When multiple labels reach the same node, **dominance rules** eliminate inferior
 ### Final Solution
 
 <div align="center">
-  <img src="assets/labeling/step_final.png" alt="Final Solution" width="700"/>
+  <img src="../../assets/labeling_algorithm/step_final.png" alt="Final Solution" width="700"/>
 </div>
 
 The algorithm terminates when all labels are processed. The optimal path (0 → 1 → 4) has total cost 11 and satisfies all constraints.

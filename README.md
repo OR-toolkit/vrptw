@@ -48,6 +48,7 @@ VRPTW/
 │   │   ├── matrices.py                   # Cost/travel time matrix computation
 │   │   └── arc_filter.py                 # Graph arc feasibility filtering
 │   └── benchmark_runner.py               # Benchmark execution orchestrator
+├── results/                              # Benchmarking results
 ├── data/                                 # Raw benchmark instances
 │   └── solomon/                          # Solomon VRPTW instances
 ├── assets/                               # Documentation figures

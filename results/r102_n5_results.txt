@@ -1,0 +1,28 @@
+============================================================
+VRPTW Column Generation Results
+============================================================
+
+Problem File: ./data/solomon/r1/r102.txt
+Number of Customers: 5
+Vehicle Capacity: 200.0
+Number of Arcs: 30
+Arc Filter Ratio: 28.6%
+Timestamp: 2025-11-12T22:16:56.522818
+
+Max iterations: 50
+
+============================================================
+Solution
+============================================================
+
+Objective Value: 202.42
+Number of Vehicles Needed: 5
+
+Routes:
+  p_0: [0, 1, 6] (value: 1.00)
+  p_1: [0, 2, 6] (value: 1.00)
+  p_2: [0, 3, 6] (value: 1.00)
+  p_3: [0, 4, 6] (value: 1.00)
+  p_4: [0, 5, 6] (value: 1.00)
+
+============================================================

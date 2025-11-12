@@ -104,24 +104,36 @@ def filter_arcs_vrptw(
 
 
 if __name__ == "__main__":
-    from parser import parse_solomon_format
+    import sys
+    from pathlib import Path
+
+    # Add parent directory to path to import from src
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+
+    from loaders.solomon_format import parse_solomon_format
     from matrices import compute_cost_matrix, compute_travel_time_matrix
 
-    file_path = "./data/solomon/r1/r101.txt"
-    customers_df, vehicle_info = parse_solomon_format(file_path, n_customers=25)
-    xs = customers_df["x"].to_numpy()
-    ys = customers_df["y"].to_numpy()
-    service_times = customers_df["service_time"].to_numpy()
-    cost_matrix = compute_cost_matrix(xs, ys)
-    travel_time_matrix = compute_travel_time_matrix(cost_matrix, service_times)
+    def process_arc_filter(file_path, n_customers=25):
+        customers_df, vehicle_info = parse_solomon_format(
+            file_path, n_customers=n_customers
+        )
+        xs = customers_df["x"].to_numpy()
+        ys = customers_df["y"].to_numpy()
+        service_times = customers_df["service_time"].to_numpy()
+        cost_matrix = compute_cost_matrix(xs, ys)
+        travel_time_matrix = compute_travel_time_matrix(cost_matrix, service_times)
 
-    filtered_graph, ratio = filter_arcs_vrptw(
-        customers_df, cost_matrix, travel_time_matrix, vehicle_info["capacity"]
-    )
+        filtered_graph, ratio = filter_arcs_vrptw(
+            customers_df, cost_matrix, travel_time_matrix, vehicle_info["capacity"]
+        )
 
-    print("Adjacency list:")
-    for k, v in list(filtered_graph["graph"].items())[:]:
-        print(f"{k}: {v}")
+        return len(filtered_graph["costs"]), ratio
 
-    print("\nNumber of arcs kept:", len(filtered_graph["costs"]))
-    print(f"{100 * ratio:.0f}% of arcs are filtered.")
+    output_path = "./results/arc_per_instance.txt"
+    Path("./results").mkdir(exist_ok=True)
+    with open(output_path, "w") as f:
+        f.write("Instance,ArcsKept,RatioFiltered(%)\n")
+        for idx in range(101, 113):
+            file_path = f"./data/solomon/r1/r{idx}.txt"
+            arcs_kept, ratio = process_arc_filter(file_path)
+            f.write(f"r{idx},{arcs_kept},{100 * ratio:.0f}\n")

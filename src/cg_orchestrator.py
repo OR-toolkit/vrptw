@@ -38,8 +38,8 @@ class ColumnGenerationOrchestrator:
             level=logging.INFO,
             format="%(name)s - %(levelname)s - %(message)s",
         )
-        logging.getLogger("src.solvers.base_solver").setLevel(logging.DEBUG)
-        logging.getLogger("src.espprc.espprc_solver").setLevel(logging.DEBUG)
+        logging.getLogger("src.solvers.base_solver").setLevel(logging.INFO)
+        logging.getLogger("src.espprc.espprc_solver").setLevel(logging.INFO)
         if not self.logger.handlers:
             ch = logging.StreamHandler()
             self.logger.addHandler(ch)

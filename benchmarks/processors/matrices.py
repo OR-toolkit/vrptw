@@ -56,7 +56,11 @@ def compute_travel_time_matrix(
 
 
 if __name__ == "__main__":
-    from solomon_format import parse_solomon_instance
+    import sys
+    from pathlib import Path
+    # Add parent directory to path to import from src
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from loaders.solomon_format import parse_solomon_instance
 
     file_path = "./data/solomon/r1/r101.txt"
     customers_df, vehicle_info = parse_solomon_instance(file_path, n_customers=25)

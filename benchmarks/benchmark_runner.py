@@ -4,9 +4,11 @@ Prepares problem data from Solomon format files for ESPPTWC solving.
 """
 
 import logging
-from typing import Tuple
+from typing import Tuple, Dict, Any, List
 import sys
 from pathlib import Path
+from datetime import datetime
+import gc
 
 # Add parent directory to path to import from src
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -101,178 +103,250 @@ def prepare_problem_data_from_solomon(
     return problem_data, ratio_filtered
 
 
-def run_benchmarks_all_r1_files(
-    base_dir: str = "./data/solomon/r1",
+def solve_and_save_results(
+    file_path: str,
     n_customers: int = 25,
-    max_iterations: int = 100,
-    file_range: Tuple[int, int] = (1, 12),
-    verbose: bool = False,
-) -> dict:
+    output_dir: str = "./results",
+    max_iterations: int = 50,
+) -> Dict[str, Any]:
     """
-    Run benchmarks for all r1*.txt files in the specified directory.
-
-    This function iterates over files r101.txt through r112.txt (or custom range)
-    and runs the column generation algorithm for each file.
+    Solve the column generation problem and save results to a file.
 
     Parameters
     ----------
-    base_dir : str, optional
-        Base directory containing the Solomon format files (default: "./data/solomon/r1")
+    file_path : str
+        Path to the Solomon format file
     n_customers : int, optional
         Number of customers to include (default: 25)
+    output_dir : str, optional
+        Directory to save results (default: "./results")
     max_iterations : int, optional
-        Maximum number of CG iterations (default: 50)
-    file_range : Tuple[int, int], optional
-        Range of file numbers to process, e.g., (1, 12) for r101.txt to r112.txt (default: (1, 12))
-    verbose : bool, optional
-        If True, print detailed information for each file (default: False)
+        Maximum number of column generation iterations (default: 50)
 
     Returns
     -------
-    dict
-        Dictionary with file names as keys and results as values. Each result contains:
-            - 'file_path': Path to the file
-            - 'objective_value': Final RMP objective value
-            - 'num_vehicles': Number of vehicles needed (nonzero variables)
-            - 'nonzero_results': Dictionary of nonzero variables with paths
-            - 'arc_filter_ratio': Ratio of arcs filtered
-            - 'problem_data': The problem data instance used
-            - 'success': Boolean indicating if the benchmark ran successfully
-            - 'error': Error message if success is False
+    Dict[str, Any]
+        Dictionary containing:
+        - 'objective_value': float
+        - 'num_vehicles': int
+        - 'routes': Dict with variable names, values, and paths
+        - 'problem_info': Dict with problem metadata
+        - 'arc_filter_ratio': float
+    """
+    orchestrator = None
+    try:
+        # Prepare problem data from Solomon format file
+        problem_data, ratio_filtered = prepare_problem_data_from_solomon(
+            file_path, n_customers
+        )
+
+        print("=" * 60)
+        print("Final master problem solution:")
+        print("=" * 60)
+
+        # Run column generation
+        orchestrator = ColumnGenerationOrchestrator(problem_data)
+        objective_value, nonzero_results = orchestrator.run(
+            max_iterations=max_iterations
+        )
+
+        # Display results
+        for var_name, (value, path) in nonzero_results.items():
+            print(f"Variable: {var_name} | Path: {path} | Value: {value:.2f}")
+
+        num_vehicles = len(nonzero_results)
+        print(
+            f"Objective value: {objective_value:.2f} | Num of Needed Vehicules: {num_vehicles}"
+        )
+
+        # Prepare results dictionary
+        results = {
+            "objective_value": objective_value,
+            "num_vehicles": num_vehicles,
+            "routes": {
+                var_name: {"value": value, "path": path}
+                for var_name, (value, path) in nonzero_results.items()
+            },
+            "problem_info": {
+                "file_path": file_path,
+                "num_customers": problem_data.num_customers,
+                "capacity": problem_data.capacity,
+                "num_arcs": len(problem_data.costs),
+                "arc_filter_ratio": ratio_filtered,
+                "timestamp": datetime.now().isoformat(),
+            },
+        }
+
+        # Save results to file
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+        # Generate output filename based on input file
+        input_filename = Path(file_path).stem
+        output_filename = f"{input_filename}_n{problem_data.num_customers}_results.txt"
+        output_path = Path(output_dir) / output_filename
+
+        with open(output_path, "w") as f:
+            f.write("=" * 60 + "\n")
+            f.write("VRPTW Column Generation Results\n")
+            f.write("=" * 60 + "\n\n")
+
+            f.write(f"Problem File: {file_path}\n")
+            f.write(f"Number of Customers: {problem_data.num_customers}\n")
+            f.write(f"Vehicle Capacity: {problem_data.capacity}\n")
+            f.write(f"Number of Arcs: {len(problem_data.costs)}\n")
+            f.write(f"Arc Filter Ratio: {ratio_filtered * 100:.1f}%\n")
+            f.write(f"Timestamp: {results['problem_info']['timestamp']}\n\n")
+            f.write(f"Max iterations: {max_iterations}\n\n")
+
+            f.write("=" * 60 + "\n")
+            f.write("Solution\n")
+            f.write("=" * 60 + "\n\n")
+
+            f.write(f"Objective Value: {objective_value:.2f}\n")
+            f.write(f"Number of Vehicles Needed: {num_vehicles}\n\n")
+
+            f.write("Routes:\n")
+            for var_name, route_info in results["routes"].items():
+                f.write(
+                    f"  {var_name}: {route_info['path']} (value: {route_info['value']:.2f})\n"
+                )
+
+            f.write("\n" + "=" * 60 + "\n")
+
+        print(f"\nResults saved to: {output_path}")
+
+        return results
+
+    finally:
+        # Explicit cleanup to prevent memory accumulation
+        if orchestrator is not None:
+            del orchestrator
+        # Force garbage collection
+        gc.collect()
+
+
+def benchmark_multiple_files(
+    data_dir: str = "./data/solomon/r1",
+    file_prefix: str = "r1",
+    start_num: int = 1,
+    end_num: int = 12,
+    n_customers: int = 25,
+    output_dir: str = "./results",
+    max_iterations: int = 50,
+) -> List[Dict[str, Any]]:
+    """
+    Benchmark multiple Solomon instance files.
+
+    Parameters
+    ----------
+    data_dir : str, optional
+        Directory containing Solomon format files (default: "./data/solomon/r1")
+    file_prefix : str, optional
+        Prefix for file names (default: "r1")
+    start_num : int, optional
+        Starting file number (default: 1)
+    end_num : int, optional
+        Ending file number (default: 12)
+    n_customers : int, optional
+        Number of customers to include (default: 25)
+    output_dir : str, optional
+        Directory to save results (default: "./results")
+    max_iterations : int, optional
+        Maximum number of column generation iterations (default: 50)
+
+    Returns
+    -------
+    List[Dict[str, Any]]
+        List of results dictionaries for each file
 
     Examples
     --------
-    >>> results = run_benchmarks_all_r1_files(
-    ...     base_dir="./data/solomon/r1",
-    ...     n_customers=25,
-    ...     max_iterations=50
+    >>> # Benchmark r101.txt through r112.txt
+    >>> results = benchmark_multiple_files(
+    ...     data_dir="./data/solomon/r1",
+    ...     file_prefix="r1",
+    ...     start_num=1,
+    ...     end_num=12,
+    ...     n_customers=25
     ... )
-    >>> for file_name, result in results.items():
-    ...     if result['success']:
-    ...         print(f"{file_name}: Objective = {result['objective_value']:.2f}")
     """
-    results = {}
-    start_num, end_num = file_range
+    all_results = []
+
+    print("=" * 60)
+    print("Benchmark Multiple Files")
+    print("=" * 60)
+    print(f"Directory: {data_dir}")
+    print(f"Files: {file_prefix}{start_num:02d}.txt to {file_prefix}{end_num:02d}.txt")
+    print(f"Number of customers: {n_customers}")
+    print(f"Max iterations: {max_iterations}")
+    print("=" * 60)
+    print()
 
     for file_num in range(start_num, end_num + 1):
-        # Format file number with leading zero (e.g., 01, 02, ..., 12)
-        file_name = f"r1{file_num:02d}.txt"
-        file_path = Path(base_dir) / file_name
+        file_name = f"{file_prefix}{file_num:02d}.txt"
+        file_path = str(Path(data_dir) / file_name)
 
-        if not file_path.exists():
-            print(f"Warning: File {file_path} does not exist. Skipping...")
-            results[file_name] = {
-                "file_path": str(file_path),
-                "success": False,
-                "error": f"File not found: {file_path}",
-            }
-            continue
-
-        if verbose:
-            print("=" * 80)
-            print(f"Processing file: {file_name}")
-            print("=" * 80)
+        print(f"\n{'=' * 60}")
+        print(f"Processing: {file_name}")
+        print(f"{'=' * 60}")
 
         try:
-            # Prepare problem data
-            problem_data, arc_filter_ratio = prepare_problem_data_from_solomon(
-                str(file_path), n_customers=n_customers
+            # Check if file exists
+            if not Path(file_path).exists():
+                print(f"File not found: {file_path}")
+                print("Skipping...")
+                continue
+
+            # Solve and save results
+            result = solve_and_save_results(
+                file_path=file_path,
+                n_customers=n_customers,
+                output_dir=output_dir,
+                max_iterations=max_iterations,
             )
 
-            if verbose:
-                print(f"Number of customers: {problem_data.num_customers}")
-                print(f"Vehicle capacity: {problem_data.capacity}")
-                print(f"Number of arcs (after filtering): {len(problem_data.costs)}")
-                print(f"Ratio of arcs filtered: {arc_filter_ratio * 100:.1f}%")
+            all_results.append(result)
 
-            # Run column generation
-            orchestrator = ColumnGenerationOrchestrator(problem_data)
-            if not verbose:
-                # Set logging to WARNING level to reduce output
-                orchestrator.logger.setLevel(logging.WARNING)
-            else:
-                orchestrator.logger.setLevel(logging.INFO)
-
-            objective_value, nonzero_results = orchestrator.run(
-                max_iterations=max_iterations
-            )
-
-            # Store results
-            results[file_name] = {
-                "file_path": str(file_path),
-                "objective_value": objective_value,
-                "num_vehicles": len(nonzero_results),
-                "nonzero_results": nonzero_results,
-                "arc_filter_ratio": arc_filter_ratio,
-                "problem_data": problem_data,
-                "success": True,
-                "error": None,
-            }
-
-            if verbose:
-                print(f"Objective value: {objective_value:.2f}")
-                print(f"Number of vehicles needed: {len(nonzero_results)}")
-                print("\nNonzero variables:")
-                for var_name, (value, path) in nonzero_results.items():
-                    print(f"  {var_name}: Path = {path}, Value = {value:.2f}")
-            else:
-                print(
-                    f"{file_name}: Objective = {objective_value:.2f}, "
-                    f"Vehicles = {len(nonzero_results)}, "
-                    f"Arc filter = {arc_filter_ratio * 100:.1f}%"
-                )
+            print(f"  Completed: {file_name}")
+            print(f"  Objective: {result['objective_value']:.2f}")
+            print(f"  Vehicles: {result['num_vehicles']}")
 
         except Exception as e:
-            error_msg = f"Error processing {file_name}: {str(e)}"
-            print(f"ERROR: {error_msg}")
-            if verbose:
-                import traceback
+            print(f"✗ Error processing {file_name}: {str(e)}")
+            import traceback
 
-                traceback.print_exc()
+            traceback.print_exc()
+            continue
 
-            results[file_name] = {
-                "file_path": str(file_path),
-                "success": False,
-                "error": error_msg,
-            }
-
-        if verbose:
-            print()
-
-    # Print summary
-    print("=" * 80)
+    # Summary
+    print("\n" + "=" * 60)
     print("Benchmark Summary")
-    print("=" * 80)
-    successful = [r for r in results.values() if r.get("success", False)]
-    failed = [r for r in results.values() if not r.get("success", False)]
+    print("=" * 60)
+    print(f"Total files processed: {len(all_results)}/{end_num - start_num + 1}")
 
-    print(f"Total files processed: {len(results)}")
-    print(f"Successful: {len(successful)}")
-    print(f"Failed: {len(failed)}")
+    if all_results:
+        print("\nResults:")
+        print(f"{'File':<15} {'Objective':<12} {'Vehicles':<10}")
+        print("-" * 40)
+        for result in all_results:
+            file_name = Path(result["problem_info"]["file_path"]).name
+            obj_val = result["objective_value"]
+            num_veh = result["num_vehicles"]
+            print(f"{file_name:<15} {obj_val:<12.2f} {num_veh:<10}")
 
+    print("=" * 60)
 
-    if successful:
-        print("\nSuccessful benchmarks:")
-        for file_name, result in results.items():
-            if result.get("success", False):
-                print(
-                    f"  {file_name}: Objective = {result['objective_value']:.2f}, "
-                    f"Vehicles = {result['num_vehicles']}"
-                )
-
-    if failed:
-        print("\nFailed benchmarks:")
-        for file_name, result in results.items():
-            if not result.get("success", False):
-                print(f"  {file_name}: {result.get('error', 'Unknown error')}")
-
-    return results
+    return all_results
 
 
 if __name__ == "__main__":
-    # Example usage
-    file_path = "./data/solomon/r1/r101.txt"
-    problem_data, ratio = prepare_problem_data_from_solomon(file_path, n_customers=25)
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+    )
+
+    problem_data, ratio = prepare_problem_data_from_solomon(
+        file_path="./data/solomon/r1/r102.txt", n_customers=5
+    )
 
     print("=" * 60)
     print("Problem Data Prepared Successfully")
@@ -280,15 +354,17 @@ if __name__ == "__main__":
     print(f"Number of customers: {problem_data.num_customers}")
     print(f"Vehicle capacity: {problem_data.capacity}")
     print(f"Time windows: {len(problem_data.time_windows[0])} nodes")
-    print(f">>>Time windows lower bounds: {problem_data.time_windows[0]}")
-    print(f">>>Time windows upper bounds: {problem_data.time_windows[1]}")
-    print(f"Number of arcs (after filtering): {len(problem_data.costs)}")
-    print(f"Ratio of arcs filtered: {ratio * 100:.1f}%")
+    print(
+        f"Number of arcs: {len(problem_data.costs)} ({ratio * 100:.0f}% are filtered)."
+    )
+
+    print("\nGraph structure (sample):")
     for node in sorted(list(problem_data.graph.keys())[:5]):
         print(f"  Node {node}: {problem_data.graph[node]}")
     print("  ...")
     for node in sorted(list(problem_data.graph.keys())[-5:]):
         print(f"  Node {node}: {problem_data.graph[node]}")
+
     print("\nDemands:")
     for node_id in sorted(problem_data.demands.keys())[:5]:
         print(f"  Node {node_id}: {problem_data.demands[node_id]}")
@@ -297,20 +373,14 @@ if __name__ == "__main__":
         print(f"  Node {node_id}: {problem_data.demands[node_id]}")
 
     print("=" * 60)
-    print("Final master problem solution:")
+    print("Trying on one file:")
     print("=" * 60)
-    # Configure the logger
-    orchestrator = ColumnGenerationOrchestrator(problem_data)
-
-    objective_value, nonzero_results = orchestrator.run(max_iterations=50)
-
-    for var_name, (value, path) in nonzero_results.items():
-        print(f"Variable: {var_name} | Path: {path} | Value: {value:.2f}")
-    print(
-        f"Objective value: {objective_value:.2f} | Num of Needed Vehicules: {len(nonzero_results)}"
+    # Solve and save results
+    results = solve_and_save_results(
+        file_path="./data/solomon/r1/r102.txt",
+        n_customers=5,
+        output_dir="./results",
+        max_iterations=50,
     )
-    print("=" * 60)
-    print("Benchmark All Files ")
-    print("=" * 60)
-    run_benchmarks_all_r1_files()
-    
+
+    benchmark_multiple_files(n_customers=25, start_num=1, max_iterations=50)

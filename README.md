@@ -1,17 +1,20 @@
 # VRPTW & Variants Solving Framework
 
-This project addresses the **Vehicle Routing Problem with Time Windows (VRPTW)** and its variants by employing a **Dantzig–Wolfe reformulation** combined with a **column generation approach**. In this context, the **pricing problem** is formulated as an **Elementary Shortest Path Problem with Resource Constraints (ESPPRC)**, which can be efficiently solved using a **labeling algorithm**. This approach is foundational in solving VRPTW and related vehicle routing problems.
+This project addresses the **Vehicle Routing Problem with Time Windows (VRPTW)** and its variants by employing a **Dantzig–Wolfe reformulation** combined with a **column generation approach**. The **pricing problem** is formulated as an **Elementary Shortest Path Problem with Resource Constraints (ESPPRC)**, solved efficiently using a **labeling algorithm**. This approach is foundational for solving VRPTW and related vehicle routing problems.
 
 ---
 
-## Design Overview
+## Design Philosophy
 
-The framework is designed to be **modular and extensible**, with a clear separation between:
+The framework is designed with **modularity, extensibility, and separation of concerns** as core principles:
 
-1. **Problem Abstraction** – The **ESPPRC base class** provides generic methods for label initialization, extension, dominance checking, and feasibility verification.
-2. **Problem-Specific Implementations** – Each variant, like **ESPPTWC**, extends the base class and defines **resource extension functions (REFs)** and feasibility rules.
-3. **Label Representation** – Partial paths are encapsulated in a **Label class**, which stores the current node, resources, and full path, enabling easy manipulation and comparison.
-4. **Column Generation Orchestrator** – A **CG orchestrator** coordinates the master problem (linear relaxation), the pricing problem (ESPPRC solved by labeling), and communication with a generic linear solver (currently CPLEX). This allows a plug-and-play, scalable Dantzig–Wolfe workflow for VRPTW and variants.
+1. **Problem Data vs. Modeling** – Problem data (customers, time windows, demands) is kept separate from modeling decisions (how to represent constraints as resources). This separation enables experimentation with different formulations of the same problem.
+
+2. **Generic ESPPRC Framework** – The base `ESPPRC` class provides reusable infrastructure for label-based algorithms, while subclasses (e.g., `ESPPTWC`) define problem-specific resource extension functions and feasibility rules.
+
+3. **Solver Abstraction** – A generic solver interface allows seamless integration with different LP/MIP solvers (currently CPLEX, extensible to Gurobi, HiGHS, etc.).
+
+4. **Benchmarking Pipeline** – A dedicated benchmarking infrastructure handles parsing standard instances (e.g., Solomon), preprocessing data, and running experiments in a reproducible manner.
 
 ---
 
@@ -19,230 +22,228 @@ The framework is designed to be **modular and extensible**, with a clear separat
 
 ```
 VRPTW/
-├── src/
-│   ├── cg_orchestrator.py                # Column Generation orchestrator (top-level workflow)
-│   ├── restricted_master_problems/
-│   │   └── set_covering.py               # RMP: Set covering master problem builder
-│   ├── solvers/
-│   │   ├── base_solver.py                # Abstract solver interface for LP/MIP
-│   │   └── cplex_solver.py               # Concrete CPLEX solver implementation
-│   ├── data_processing/                  # Modules to parse and prepare problem data
-│   │   └── __init__.py
-│   └── espprc/                           # Core ESPPRC framework
-│       ├── __init__.py
-│       ├── base.py                       # Generic ESPPRC base class and Label definition
-│       ├── espptwc.py                    # ESPPTWC implementation (Time Windows + Capacity)
-│       ├── espprc_solver.py              # Labeling algorithm implementation
-│       └── problem_data_test.py          # Small test instances for ESPPTWC
-├── data/                                 # Solomon benchmark instances for testing and validation
-├── .gitignore
-├── asssets
-├── .vscode
+├── src/                                  # Core solver package
+│   ├── cg_orchestrator.py                # Column generation orchestrator
+│   ├── model.py                          # High-level model interface
+│   ├── espprc/                           # ESPPRC framework
+│   │   ├── espprc_data.py                # Problem data structures
+│   │   ├── espprc_model.py               # Base ESPPRC model class
+│   │   ├── espptwc_model.py              # VRPTW-specific implementation
+│   │   ├── espprc_solver.py              # Labeling algorithm
+│   │   ├── label.py                      # Label representation
+│   │   ├── resource.py                   # Resource definitions
+│   │   ├── examples.py                   # Example instances
+│   │   └── README.md                     # Detailed ESPPRC documentation
+│   ├── restricted_master_problems/       # Master problem formulations
+│   │   ├── set_covering.py               # Set covering RMP
+│   │   └── examples.py
+│   └── solvers/                          # LP/MIP solver abstractions
+│       ├── base_solver.py                # Abstract solver interface
+│       ├── cplex_solver.py               # CPLEX implementation
+│       └── examples.py
+├── benchmarks/                           # Benchmarking infrastructure
+│   ├── loaders/                          # Instance file parsers
+│   │   └── solomon_format.py             # Solomon VRPTW format parser
+│   ├── processors/                       # Data preprocessing
+│   │   ├── matrices.py                   # Cost/travel time matrix computation
+│   │   └── arc_filter.py                 # Graph arc feasibility filtering
+│   └── benchmark_runner.py               # Benchmark execution orchestrator
+├── data/                                 # Raw benchmark instances
+│   └── solomon/                          # Solomon VRPTW instances
+├── assets/                               # Documentation figures
+├── environment.yml                       # Conda environment specification
 ├── LICENSE
 └── README.md
-
 ```
 
-> **New:** See [`cg_orchestrator.py`](./cg_orchestrator.py) for the new high-level column generation workflow.
-
----
-
-## Column Generation Flowchart
-
-- [Click Here](src/README.md)
+> **Navigation:** See [`src/README.md`](src/README.md) for column generation workflow details and [`src/espprc/README.md`](src/espprc/README.md) for labeling algorithm explanation with diagrams.
 
 ---
 
 ## Core Components
 
-### 1. ESPPRC Base Class (`espprc/base.py`)
+### 1. ESPPRC Framework (`src/espprc/`)
 
-The `ESPPRC` class defines a **generic framework** for solving Elementary Shortest Path Problems with Resource Constraints.  
-It handles:
+The ESPPRC package provides a **generic, extensible framework** for solving Elementary Shortest Path Problems with Resource Constraints.
 
-- Generic **label initialization** and **extension** via Resource Extension Functions (REFs)
-- **Feasibility checks** for all registered resources
-- **Dominance filtering** through the `Label` class
-- Unified support for **constant** and **node-dependent** resource windows
+#### Architecture
 
-#### Expected `problem_data` Structure
+**Problem Data Layer** (`espprc_data.py`)
+- `ESPPRCProblemData`: Pure problem data (graph structure, arc costs, number of nodes)
+- Agnostic to modeling decisions; describes only what the problem statement provides
 
-```python
-   {
-      "num_customers": int,
-      "resource_windows": {
-         "constant": {
-               <resource_name>: ([lower_bounds], [upper_bounds]),
-               ...
-         },
-         "node_dependent": {
-               <resource_name>: ([lower_i, ..., lower_n], [upper_i, ..., upper_n]),
-               ...
-         }
-      },
-      "graph": {i: [neighbors], ...},             # adjacency list
-      "reduced_costs": {(i, j): float, ...},      # arc cost or reduced cost
-      # Optional problem-specific fields (defined by subclasses)
-   }
-```
+**Modeling Layer** (`espprc_model.py`)
+- `ESPPRC`: Abstract base class that transforms problem data into a solvable model
+- Defines resources, resource windows, and resource extension functions (REFs)
+- Handles label extension, feasibility checking, and dominance filtering
 
-> The following graph illustrates how such a `problem_data` structure translates into an ESPPTWC instance, where nodes, arcs, and resource windows correspond to the defined fields.
+**Problem-Specific Models** (`espptwc_model.py`)
+- `ESPPTWC`: Implements VRPTW-specific modeling choices
+- Defines time, load, cost, and elementarity resources
+- Registers appropriate REFs for each resource
 
-## ![Problem Data Example](./assets/problem_data_2.png)
+**Label Representation** (`label.py`)
+- `Label`: Encapsulates a partial path with current node, resource values, and path history
+- Implements dominance checking between labels
 
-### 2. Label Class (`espprc/label.py`)
+**Solver** (`espprc_solver.py`)
+- `LabelingSolver`: Implements the labeling algorithm with multiple label selection strategies
+- Returns optimal or improving paths for column generation
 
-The `Label` class represents a **partial path** (state) during the labeling process.
-
-- Stores **current node**, **path**, and a **resource dictionary** (`Dict[str, np.ndarray]`)
-- Implements its own **dominance rule** via `dominates(self, other)`
-- Supports deep copies of resource vectors for safe propagation
-
-Example structure:
+#### Example Usage
 
 ```python
-Label(
-    node=3,
-    resources={"time": np.array([12.0]), "load": np.array([7.0])},
-    path=[0, 1, 3]
+from src.espprc.espptwc_model import ESPPTWC
+from src.espprc.espprc_data import ESPPTWCProblemData
+from src.espprc.espprc_solver import LabelingSolver
+
+# Define problem data
+problem_data = ESPPTWCProblemData(
+    num_customers=25,
+    graph={0: [1, 2, 3], ...},
+    costs={(0, 1): 5.0, ...},
+    travel_times={(0, 1): 10.0, ...},
+    demands={1: 7, 2: 5, ...},
+    time_windows=[(0, 100), (10, 50), ...],
+    vehicle_capacity=100
 )
+
+# Create model (builds resources and REFs internally)
+model = ESPPTWC(problem_data)
+
+# Solve using labeling algorithm
+solver = LabelingSolver(model)
+best_labels, best_cost = solver.solve()
 ```
 
----
+### 2. Column Generation Orchestrator (`src/cg_orchestrator.py`)
 
-### 3. ESPPTWC (`espprc/espptwc.py`)
+The `ColumnGenerationOrchestrator` implements the complete Dantzig–Wolfe decomposition workflow:
 
-Implements the **Elementary Shortest Path Problem with Time Windows and Capacity** (ESPPTWC).
-This subclass registers **problem-specific REFs** for:
+1. **Initialize** restricted master problem (RMP) as a set covering formulation
+2. **Iterate:**
+   - Solve RMP to obtain dual values
+   - Update arc costs with dual information
+   - Solve pricing problem (ESPPRC) to find improving columns
+   - Add new columns (routes) to RMP
+3. **Terminate** when no negative reduced cost columns exist
 
-- `time` (scalar, respecting node-dependent time windows)
-- `load` (vehicle capacity constraint)
-- `reduced_cost` (accumulated reduced cost)
-- `is_visited` (vector of visited customers)
-
----
-
-### 4. Labeling Algorithm & Solver (`espprc/espprc_solver.py`)
-
-Implements a **generic labeling algorithm** to solve ESPPRC instances via the `LabelingSolver` class.
-
-The `LabelingSolver` is now the entry point for solving the pricing problem during column generation.
-It exposes:
-
-- Multiple **label selection strategies** (FIFO/LIFO/min resource, etc.)
-- A `.solve()` method returning optimal or improving labels for the ESPPRC subproblem
-- Simple integration into the column generation workflow (see orchestrator below)
-
-**Example usage:**
-
-```python
-from espprc.espptwc import ESPPTWC
-from espprc.problem_data_test import problem_data_test_2
-from espprc.espprc_solver import LabelingSolver
-
-if __name__ == "__main__":
-    problem = ESPPTWC(problem_data_test_2)
-    solver = LabelingSolver(problem)
-    best_labels, best_reduced_cost = solver.solve()
-    print(best_labels)
-```
-
----
-
-### 5. Column Generation Orchestrator (`cg_orchestrator.py`)
-
-**New:** The CG orchestrator brings together all components to implement the complete Dantzig–Wolfe/column generation loop for VRPTW and its variants.
-
-Key responsibilities of the **`ColumnGenerationOrchestrator`**:
-
-- Initializes the restricted master problem (RMP) as a (relaxed) set covering problem through `set_covering.py`
-- Maps labels/paths from the pricing problem as columns in the RMP
-- Communicates dual prices from the master to the ESPPRC pricing subproblem (via cost adjustment)
-- Uses the `LabelingSolver` for repeatedly solving the ESPPRC pricing problem
-- Integrates with either a generic or CPLEX-based solver (`base_solver.py`, `cplex_solver.py`)
-- Iteratively adds columns/routes until no negative reduced cost column exists (up to a specified tolerance or iteration limit)
-
-**Example usage:**
+**Key Features:**
+- Modular interface to LP/MIP solvers via `base_solver.py`
+- Configurable convergence criteria and iteration limits
+- Integration with any ESPPRC variant
 
 ```python
 from src.cg_orchestrator import ColumnGenerationOrchestrator
-from src.espprc.problem_data import ESPPTWCProblemData, BaseResourceWindows
-from src.test_data_instances import espptwc_test_longest_path
-
-problem_data = ESPPTWCProblemData(
-    num_customers=espptwc_test_longest_path["num_customers"],
-    resource_windows=BaseResourceWindows(
-        constant=espptwc_test_longest_path["resource_windows"]["constant"],
-        node_dependent=espptwc_test_longest_path["resource_windows"]["node_dependent"],
-    ),
-    graph=espptwc_test_longest_path["graph"],
-    costs=espptwc_test_longest_path["costs"],
-    travel_times=espptwc_test_longest_path["travel_times"],
-    demands=espptwc_test_longest_path["demands"],
-)
 
 orchestrator = ColumnGenerationOrchestrator(problem_data)
-objective, variables = orchestrator.run(max_iterations=50)
-print("Master problem objective:", objective)
-print("Route allocation:", variables)
+objective, routes = orchestrator.run(max_iterations=100, tolerance=1e-6)
 ```
 
+### 3. Solver Abstractions (`src/solvers/`)
+
+**Abstract Interface** (`base_solver.py`)
+- Defines common operations: add variables, add constraints, set objective, solve
+- Enables solver-agnostic algorithm implementation
+
+**CPLEX Implementation** (`cplex_solver.py`)
+- Concrete implementation using IBM CPLEX
+- Supports both continuous relaxation and integer programming
+
+**Extensibility:** Additional solvers (Gurobi, HiGHS, SCIP) can be added by implementing the `BaseSolver` interface.
+
 ---
 
-### 6. Linear Problem Solver Abstractions
+## Benchmarking Infrastructure
 
-**`solvers/base_solver.py`**  
-Abstract base class for LP/MIP solvers. Handles variables, constraints, objective definition at an abstract level.
+The `benchmarks/` module provides a reproducible pipeline for evaluating the solver on standard instances.
 
-**`solvers/cplex_solver.py`**  
-CPLEX implementation supporting fast solving of relaxed or (integral) master problems. Sits seamlessly underneath the orchestrator, but other solvers can be swapped in.
+### Architecture
 
----
+```
+Raw Instance Files (Solomon format)
+        ↓ [loaders/solomon_format.py]
+Parsed Data (coordinates, demands, time windows)
+        ↓ [processors/matrices.py]
+Cost & Travel Time Matrices
+        ↓ [processors/arc_filter.py]
+Feasible Graph (time window and capacity filtering)
+        ↓ [Convert to ESPPRCProblemData]
+Solver Input Format
+        ↓ [benchmark_runner.py]
+Results (objective, computation time, routes)
+```
 
-## Example Problem Data Tests
+### Components
 
-Three small **ESPPTWC test instances** are included to validate the labeling algorithm:
+**Loaders** (`benchmarks/loaders/`)
+- Parse standard benchmark file formats
+- `solomon_format.py`: Handles Solomon VRPTW instances (C1, C2, R1, R2, RC1, RC2)
+- Outputs: NumPy arrays of coordinates, demands, time windows, service times
 
-- `problem_data_test_1`
-- `problem_data_test_2`
-- `problem_data_test_3`
+**Processors** (`benchmarks/processors/`)
+- `matrices.py`: Computes Euclidean cost and travel time matrices from coordinates
+- `arc_filter.py`: Pre-filters infeasible arcs based on time windows and capacity constraints
+- Reduces graph density for improved performance
 
-Each defines a toy problem with capacity and time window constraints, useful for debugging and algorithm verification.
+**Runner** (`benchmarks/benchmark_runner.py`)
+- Orchestrates the complete benchmark workflow
+- Handles multiple instances, timeout management, and result collection
+- Exports results in structured format for analysis
+
+### Usage Example
+
+```python
+from benchmarks.loaders.solomon_format import parse_solomon_format
+from benchmarks.processors.matrices import compute_cost_matrix, compute_travel_time_matrix
+from benchmarks.processors.arc_filter import filter_arcs_vrptw
+
+# Parse Solomon instance
+customers_df, vehicle_info = parse_solomon_format("data/solomon/r101.txt")
+
+# Build matrices
+xs, ys = customers_df['x'].values, customers_df['y'].values
+cost_matrix = compute_cost_matrix(xs, ys)
+travel_time_matrix = compute_travel_time_matrix(cost_matrix, customers_df['service_time'].values)
+
+# Filter infeasible arcs
+graph_data, filter_ratio = filter_arcs_vrptw(
+    customers_df, cost_matrix, travel_time_matrix, vehicle_info['capacity']
+)
+
+# Convert to solver format and solve
+# ... (create ESPPTWCProblemData and run orchestrator)
+```
 
 ---
 
 ## Data & Benchmarks
 
-The project will later leverage **Solomon benchmark instances** for VRPTW problems:
+The project uses **Solomon benchmark instances** for VRPTW validation:
 
-> M. M. Solomon, _Algorithms for the Vehicle Routing and Scheduling Problems with Time Window Constraints_, Operations Research, 35(2), 1987.
+> M. M. Solomon, *Algorithms for the Vehicle Routing and Scheduling Problems with Time Window Constraints*, Operations Research, 35(2), 1987.
 
-These datasets will be parsed and converted into the above `problem_data` format via the `data_processing` module.
+**Instance Categories:**
+- **R1, R2**: Randomly distributed customers (tight vs. wide time windows)
+- **C1, C2**: Clustered customers (tight vs. wide time windows)
+- **RC1, RC2**: Mixed random-clustered distribution
+
+Instances are stored in `data/solomon/` and processed via the benchmarking pipeline.
 
 ---
 
-## Future Directions
+## References
 
-1. **Support for More VRP Variants**
-
-   - Develop and integrate additional VRP variants (e.g., VRPB, multi-depot, pickup and delivery), each as their own ESPPRC extension with corresponding master problem formulation.
-   - Establish a plugin or registry mechanism for smooth integration and selection of new variants.
-
-2. **Solver Extensibility**
-
-   - Add support for alternative linear/MIP solvers adhering to the `base_solver.py` interface (e.g., Gurobi, CBC, HiGHS), so users aren't limited to CPLEX.
-   - Make the choice of solver straightforward and easily swappable.
-
-3. **Benchmarking and Scaling**
-
-   - Prepare for evaluation on standard datasets like Solomon's VRPTW instances as the implementation matures.
-
-4. **API and Package Refactoring**
-   - Reorganize subpackages and modules for greater clarity and a more intuitive user experience.
-   - Provide clean APIs for problem setup, solution, and results retrieval.
+- Desrosiers, J., Lübbecke, M., Desaulniers, G., & Gauthier, J. B. (2024). Branch-and-Price. Springer. ISBN: 978-3-031-96916-4. [Chapter 5: Vehicle Routing and Crew Scheduling Problems, pp. 291-338]
 
 ---
 
 ## License
 
 This project is licensed under the **MIT License** – see the [LICENSE](./LICENSE) file for details.
+
+---
+
+## Acknowledgments
+
+This work is part of ongoing PhD research in combinatorial optimization and column generation methods for vehicle routing problems.

@@ -1,0 +1,11 @@
+logging:
+  filename: "app.log"
+  level: "INFO"
+  format: "%(name)s - %(levelname)s - %(message)s"
+  loggers:
+    src.solvers.base_solver: "INFO"
+    src.espprc.espprc_solver: "INFO"
+
+orchestrator:
+  max_iterations: 50
+  tolerance: 1.0e-5

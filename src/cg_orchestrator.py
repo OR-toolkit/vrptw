@@ -16,6 +16,7 @@ from src.espprc.espprc_data import ESPPRCBaseProblemData
 from src.espprc.espprc_model import EspprcModel
 from src.espprc.espptwc_model import EspptwcModel
 from src.espprc.espprc_solver import LabelingSolver
+from src.config_loader import get_config
 
 
 class ColumnGenerationOrchestrator:
@@ -33,13 +34,14 @@ class ColumnGenerationOrchestrator:
             initial_routes (Optional[List[List[int]]]): Optional list of initial routes. Each route is a list of node indices.
         """
         self.logger = logging.getLogger(__name__)
+        config = get_config()
         logging.basicConfig(
-            filename='app.log',            # name of the log file
-            level=logging.INFO,
-            format="%(name)s - %(levelname)s - %(message)s",
+            filename=config['logging']['filename'],
+            level=getattr(logging, config['logging']['level']),
+            format=config['logging']['format'],
         )
-        logging.getLogger("src.solvers.base_solver").setLevel(logging.INFO)
-        logging.getLogger("src.espprc.espprc_solver").setLevel(logging.INFO)
+        logging.getLogger("src.solvers.base_solver").setLevel(getattr(logging, config['logging']['loggers']['src.solvers.base_solver']))
+        logging.getLogger("src.espprc.espprc_solver").setLevel(getattr(logging, config['logging']['loggers']['src.espprc.espprc_solver']))
         if not self.logger.handlers:
             ch = logging.StreamHandler()
             self.logger.addHandler(ch)
@@ -148,18 +150,23 @@ class ColumnGenerationOrchestrator:
             routes.append(route)
         return routes
 
-    def run(self, max_iterations: int = 50, tol: float = 1e-5):
+    def run(self, max_iterations: Optional[int] = None, tol: Optional[float] = None):
         """
         Main CG loop.
 
         Args:
-            max_iterations (int, optional): Maximum number of CG iterations. Defaults to 50.
-            tol (float, optional): Reduced cost tolerance for stopping. Defaults to 1e-5.
+            max_iterations (int, optional): Maximum number of CG iterations. Defaults to config value.
+            tol (float, optional): Reduced cost tolerance for stopping. Defaults to config value.
 
         Returns:
             Tuple[Any, Any]: Final objective value, and a dictionary {var_name: (value, path)} for nonzero variables.
         """
         logger = self.logger
+        config = get_config()
+        if max_iterations is None:
+            max_iterations = config['orchestrator']['max_iterations']
+        if tol is None:
+            tol = float(config['orchestrator']['tolerance'])
 
         for iter_no in range(max_iterations):
             # Solve current restricted master problem
@@ -265,7 +272,7 @@ if __name__ == "__main__":
 
     # Instantiate the CG orchestrator with sample problem data and run the column generation algorithm
     orchestrator = ColumnGenerationOrchestrator(problem_data)
-    objective_value, nonzero_results = orchestrator.run(max_iterations=50)
+    objective_value, nonzero_results = orchestrator.run()
 
     # Print the final master problem solution
     print(40 * "=")

@@ -26,6 +26,7 @@ dependencies:
   - python=3.11.0=h3ba56d0_1_cpython
   - python-dateutil=2.9.0.post0=pyhe01879c_2
   - python-tzdata=2025.2=pyhd8ed1ab_0
+  - pyyaml
   - python_abi=3.11=8_cp311
   - pytz=2025.2=pyhd8ed1ab_0
   - readline=8.2=h1d1bf99_2
